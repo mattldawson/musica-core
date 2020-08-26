@@ -5,11 +5,4 @@
 !CMakeLists.txt
 !SetDefaults.cmake
 !src/
-!apps/
-!libs/
 !test/
-!examples/
-
-# blacklist generated code
-libs/Mechanism_Collection/configured_tags/*
-libs/MICM_Chemistry/src/preprocessor_output/*
