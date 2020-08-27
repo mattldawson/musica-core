@@ -2,7 +2,7 @@
 
 !> \page adding_documentation Documenting 
 !!
-!! MusicBox uses <A HREF="http://www.doxygen.nl"> Doxygen </A>
+!! musica-core uses <A HREF="http://www.doxygen.nl"> Doxygen </A>
 !! to generate documentation.
 !! General usage is described in the following sections.
 !! More information can be found in the

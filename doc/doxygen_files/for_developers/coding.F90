@@ -5,7 +5,7 @@
 !! under the CC-By 3.0 License. See
 !! <a href="https://creativecommons.org/licenses/by/3.0/">https://creativecommons.org/licenses/by/3.0/</a>
 !! for more details. Portions of the text have been modified to apply to
-!! FORTRAN code and reflect style choices made for MusicBox, but many
+!! FORTRAN code and reflect style choices made for musica-core, but many
 !! sections are presented unchanged, starting with this:
 !!
 !! Use common sense and BE CONSISTENT.
@@ -157,7 +157,7 @@
 !! \anchor coding_comments_style
 !! ### Comment style ###
 !!
-!! MusicBox uses <A HREF="http://www.doxygen.nl"> Doxygen </A>
+!! musica-core uses <A HREF="http://www.doxygen.nl"> Doxygen </A>
 !! to auto-generate documentation. More information on how to comment your
 !! code for use with Doxygen is described \ref adding_documentation "here".
 !!

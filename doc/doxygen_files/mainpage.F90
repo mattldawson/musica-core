@@ -1,26 +1,18 @@
-!> \mainpage MusicBox Documentation
-!! MusicBox implements the MUSICA library to solve atmospheric chemistry
-!! and physics in a box or column. It is intended to provide access for
-!! scientists and educations with little or no modeling experience to
-!! advanced atmospheric simulations, which can be configured to include
-!! novel chemical/physical processes.
+!> \mainpage musica-core documentation
+!! The musica-core library can be used to build a model like MusicBox
 !!
 !! \htmlonly
 !! <div class="row"><div class="col-sm-4">
 !! \endhtmlonly
-!!     \anchor main_music_box_and_you
-!!     ### MusicBox and You ###
+!!     \anchor main_install
+!!     ### Installation ###
 !!
-!!     - \subpage music_box_and_you "Installing"
-!!     - \ref music_box_and_you_input_data "Input Data"
-!!     - \ref music_box_and_you_running "Running the Model"
-!!     - \ref music_box_and_you_results "Results"
+!!     \todo Finish installation instructions
 !!
-!!     \anchor main_the_science
-!!     ### The Science of MusicBox ###
+!!     \anchor main_build_model
+!!     ### Building a model ###
 !!
-!!     - \subpage the_science_chemistry "Chemistry"
-!!     - \ref the_science_aerosols "Aerosols"
+!!     \todo Finish instructions for building a model
 !!
 !! \htmlonly
 !! </div><div class="col-sm-4">
