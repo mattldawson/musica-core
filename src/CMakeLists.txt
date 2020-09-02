@@ -8,14 +8,20 @@ set(MUSICA_SRC config.F90
                emissions.F90
                evolving_conditions.F90
                initial_conditions.F90
-               io.F90
-               io_factory.F90
-               ios/netcdf.F90
-               ios/netcdf_dimension.F90
-               ios/netcdf_file.F90
-               ios/netcdf_updater.F90
-               ios/netcdf_variable.F90
-               ios/text.F90
+               input_output/file.F90
+               input_output/file_dimension.F90
+               input_output/file_dimension_factory.F90
+               input_output/file_dimensions/netcdf.F90
+               input_output/file_dimensions/text.F90
+               input_output/file_factory.F90
+               input_output/file_updater.F90
+               input_output/file_variable.F90
+               input_output/file_variable_factory.F90
+               input_output/file_variables/netcdf.F90
+               input_output/file_variables/text.F90
+               input_output/files/netcdf.F90
+               input_output/files/text.F90
+               input_output/input_output_processor.F90
                loss.F90
                util/array.F90
                util/assert.F90

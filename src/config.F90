@@ -425,7 +425,8 @@ contains
     !> Flag indicating whether key was found
     logical, intent(out), optional :: found
 
-    call get_string( this, key, value, caller, default%val_, found )
+    call get_string( this, key, value, caller, default = default%val_,        &
+                     found = found )
 
   end subroutine get_string_string_default
 

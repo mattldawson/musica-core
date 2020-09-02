@@ -2,38 +2,37 @@
 ! SPDX-License-Identifier: Apache-2.0
 !
 !> \file
-!> The musica_netcdf_updater module
+!> The musica_file_updater module
 
-!> The netcdf_updater_t type and related functions
-module musica_netcdf_updater
+!> The file_updater_t type and related functions
+module musica_file_updater
 
   use musica_constants,                only : musica_dk, musica_ik
   use musica_domain,                   only : domain_state_accessor_t,        &
                                               domain_state_mutator_t
-  use musica_netcdf_variable,          only : netcdf_variable_t
-  use netcdf
+  use musica_file_variable,            only : file_variable_t
 
   implicit none
   private
 
-  public :: netcdf_updater_t, netcdf_updater_ptr
+  public :: file_updater_t, file_updater_ptr
 
   !> Max length of staged data array
   integer(kind=musica_ik), parameter :: kMaxStagedData = 100
 
-  !> Updater for a paired MUSICA <-> NetCDF variable
+  !> Updater for a paired MUSICA <->  variable
   !!
   !! Staging data and functions for updating MUSICA state variables from input
   !! data and updating output files from the MUSICA state.
   !!
-  type :: netcdf_updater_t
+  type :: file_updater_t
     private
     !> Mutator for the variable
     class(domain_state_mutator_t), pointer :: mutator_ => null( )
     !> Accessor for the variable
     class(domain_state_accessor_t), pointer :: accessor_ => null( )
     !> Variable information
-    type(netcdf_variable_t) :: variable_
+    class(file_variable_t), pointer :: variable_ => null( )
     !> Index of first staged data
     integer(kind=musica_ik) :: first_staged_index_ = 1
     !> Number of staged data
@@ -43,59 +42,64 @@ module musica_netcdf_updater
   contains
     !> Updates the state for a given index in the temporal dimension
     procedure :: update_state
+    !> Outputs data to the file
+    procedure :: output
     !> Prints the properties of the updater
     procedure :: print => do_print
     !> Updates the staged data
     procedure, private :: update_staged_data
     !> Finalize the updater
     final :: finalize
-  end type netcdf_updater_t
+  end type file_updater_t
 
   !> Constructor
-  interface netcdf_updater_t
+  interface file_updater_t
     module procedure :: constructor
-  end interface netcdf_updater_t
+  end interface file_updater_t
 
-  !> Pointer to netcdf_updater_t objects
-  type :: netcdf_updater_ptr
-    type(netcdf_updater_t), pointer :: val_
-  end type netcdf_updater_ptr
+  !> Pointer to file_updater_t objects
+  type :: file_updater_ptr
+    type(file_updater_t), pointer :: val_ => null( )
+  end type file_updater_ptr
 
 contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Creates a MUSICA <-> NetCDF variable match
+  !> Creates a MUSICA <-> File variable match
   function constructor( file, domain, variable ) result( new_obj )
 
     use musica_assert,                 only : die
     use musica_domain,                 only : domain_t
-    use musica_netcdf_file,            only : netcdf_file_t
-    use musica_netcdf_variable,        only : netcdf_variable_t
+    use musica_file,                   only : file_t
+    use musica_file_variable,          only : file_variable_t
     use musica_string,                 only : string_t
 
-    !> New MUSICA<->NetCDF variable match
-    type(netcdf_updater_t), pointer :: new_obj
-    !> NetCDF file
-    class(netcdf_file_t), intent(in) :: file
+    !> New MUSICA<->File variable match
+    type(file_updater_t), pointer :: new_obj
+    !> File to update to or from
+    class(file_t), intent(inout) :: file
     !> Model domain
     class(domain_t), intent(inout) :: domain
-    !> NetCDF variable
-    class(netcdf_variable_t), intent(in) :: variable
+    !> File variable
+    class(file_variable_t), intent(in) :: variable
 
-    character(len=*), parameter :: my_name = "NetCDF updater constructor"
+    character(len=*), parameter :: my_name = "File updater constructor"
     type(string_t) :: std_units, var_name
 
     allocate( new_obj )
-    new_obj%variable_ = variable
+    allocate( new_obj%variable_, source = variable )
     var_name = variable%musica_name( )
     std_units = domain%cell_state_units( var_name%to_char( ) )
     if( file%is_input( ) ) then
       new_obj%mutator_ => domain%cell_state_mutator( var_name%to_char( ),     & !- state variable name
                                                      std_units%to_char( ),    & !- MUSICA units
                                                      my_name )
-    else
-      call die( 386789282 )
+    end if
+    if( file%is_output( ) ) then
+      new_obj%accessor_ => domain%cell_state_accessor( var_name%to_char( ),   & !- state variable name
+                                                       std_units%to_char( ),  & !- MUSICA units
+                                                       my_name )
     end if
 
   end function constructor
@@ -108,12 +112,12 @@ contains
     use musica_assert,                 only : assert
     use musica_domain,                 only : domain_iterator_t,              &
                                               domain_state_t
-    use musica_netcdf_file,            only : netcdf_file_t
+    use musica_file,                   only : file_t
 
-    !> NetCDF updater
-    class(netcdf_updater_t), intent(inout) :: this
-    !> NetCDF file
-    class(netcdf_file_t), intent(inout) :: file
+    !> File updater
+    class(file_updater_t), intent(inout) :: this
+    !> File file
+    class(file_t), intent(inout) :: file
     !> Index in the temporal dimension to update from
     integer(kind=musica_ik), intent(in) :: index
     !> Domain state iterator
@@ -135,11 +139,46 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+  !> Outputs data to a file
+  subroutine output( this, file, time__s, domain, domain_state, iterator )
+
+    use musica_assert,                 only : assert_msg
+    use musica_domain,                 only : domain_t, domain_state_t,       &
+                                              domain_iterator_t
+    use musica_file,                   only : file_t
+
+    !> File updater
+    class(file_updater_t), intent(inout) :: this
+    !> Output file
+    class(file_t), intent(inout) :: file
+    !> Current simulation time [s]
+    real(kind=musica_dk), intent(in) :: time__s
+    !> Model domain
+    class(domain_t), intent(in) :: domain
+    !> Domain state
+    class(domain_state_t), intent(in) :: domain_state
+    !> Domain iterator
+    class(domain_iterator_t), intent(inout) :: iterator
+
+    real(kind=musica_dk) :: state_value
+
+    call iterator%reset( )
+    if( iterator%next( ) ) then
+      call domain_state%get( iterator, this%accessor_, state_value )
+      call this%variable_%output( file, time__s, state_value )
+    end if
+    call assert_msg( 608265274, .not. iterator%next( ), "Output files are "// &
+                     "not yet set up for multiple cells." )
+
+  end subroutine output
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
   !> Prints the contents of the updater
   subroutine do_print( this )
 
-    !> NetCDF updater
-    class(netcdf_updater_t), intent(in) :: this
+    !> File updater
+    class(file_updater_t), intent(in) :: this
 
     call this%variable_%print( )
 
@@ -151,12 +190,12 @@ contains
   subroutine update_staged_data( this, file, index )
 
     use musica_assert,                 only : assert
-    use musica_netcdf_file,            only : netcdf_file_t
+    use musica_file,                   only : file_t
 
-    !> NetCDF updater
-    class(netcdf_updater_t), intent(inout) :: this
-    !> NetCDF file
-    class(netcdf_file_t), intent(inout) :: file
+    !> File updater
+    class(file_updater_t), intent(inout) :: this
+    !> File file
+    class(file_t), intent(inout) :: file
     !> New starting index
     integer(kind=musica_ik), intent(in) :: index
 
@@ -167,12 +206,7 @@ contains
     call file%check_open( )
     call assert( 382334001, index .gt. 0 .and. n_times .ge. 1 )
     this%staged_data_(:) = -huge( 1.0_musica_dk )
-    call file%check_status( 142628652,                                        &
-                            nf90_get_var( file%id( ), this%variable_%id( ),   &
-                                          this%staged_data_,                  &
-                                          start = (/ index /),                &
-                                          count = (/ n_times /) ),            &
-                            "Error staging variable data" )
+    call this%variable_%get_data( file, index, n_times, this%staged_data_ )
     this%first_staged_index_ = index
     this%number_staged_      = n_times
 
@@ -180,17 +214,17 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Finalize the NetCDF updater
+  !> Finalize the File updater
   subroutine finalize( this )
 
-    !> NetCDF updater
-    type(netcdf_updater_t), intent(inout) :: this
+    !> File updater
+    type(file_updater_t), intent(inout) :: this
 
     if( associated( this%mutator_  ) ) deallocate( this%mutator_  )
     if( associated( this%accessor_ ) ) deallocate( this%accessor_ )
-
+    if( associated( this%variable_ ) ) deallocate( this%variable_ )
   end subroutine finalize
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-end module musica_netcdf_updater
+end module musica_file_updater

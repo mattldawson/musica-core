@@ -8,7 +8,7 @@
 module musica_evolving_conditions
 
   use musica_constants,                only : musica_dk
-  use musica_io,                       only : io_ptr
+  use musica_input_output_processor,   only : input_output_processor_ptr
 
   implicit none
   private
@@ -19,7 +19,7 @@ module musica_evolving_conditions
   type evolving_conditions_t
     private
     !> Input files
-    class(io_ptr), allocatable :: input_files_(:)
+    class(input_output_processor_ptr), allocatable :: input_files_(:)
   contains
     !> Get suggested output times [s]
     procedure :: get_update_times__s
@@ -44,7 +44,7 @@ contains
     use musica_assert,                 only : assert_msg
     use musica_config,                 only : config_t
     use musica_domain,                 only : domain_t
-    use musica_io_factory,             only : io_builder
+    use musica_input_output_processor, only : input_output_processor_t
     use musica_iterator,               only : iterator_t
     use musica_string,                 only : string_t
 
@@ -81,7 +81,8 @@ contains
       call file_config%add( "type", file_type, my_name )
       call file_config%add( "intent", "input", my_name )
       call file_config%add( "file name", file_name, my_name )
-      new_obj%input_files_( i_file )%val_ => io_builder( file_config, domain )
+      new_obj%input_files_( i_file )%val_ =>                                  &
+          input_output_processor_t( file_config, domain )
       call file_config%finalize( )
       i_file = i_file + 1
     end do
