@@ -28,8 +28,7 @@ contains
   subroutine set_initial_conditions( config, domain, state )
 
     use musica_iterator,               only : iterator_t
-    use musica_io,                     only : io_t
-    use musica_io_factory,             only : io_builder
+    use musica_input_output_processor, only : input_output_processor_t
     use musica_string,                 only : string_t
 
     !> Initial condition configuration data
@@ -42,7 +41,7 @@ contains
     character(len=*), parameter :: my_name = 'initial conditions'
     logical :: found
     type(config_t) :: subset, input_file_config, photolysis_config
-    class(io_t), pointer :: input_file
+    class(input_output_processor_t), pointer :: input_file
     class(iterator_t), pointer :: iter
     type(string_t) :: temp_str
     type(string_t), allocatable :: str_array(:)
@@ -59,7 +58,7 @@ contains
         call input_file_config%add( "type", temp_str, my_name )
         call input_file_config%add( "intent", "input", my_name )
         call input_file_config%add( "file name", subset%key( iter ), my_name )
-        input_file => io_builder( input_file_config, domain )
+        input_file => input_output_processor_t( input_file_config, domain )
         call input_file%update_state( domain, state )
         deallocate( input_file )
         call input_file_config%finalize( )

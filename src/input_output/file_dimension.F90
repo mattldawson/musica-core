@@ -2,29 +2,30 @@
 ! SPDX-License-Identifier: Apache-2.0
 !
 !> \file
-!> The musica_netcdf_dimension module
+!> The musica_file_dimension module
 
-!> The netcdf_dimension_t type and related functions
-module musica_netcdf_dimension
+!> The file_dimension_t type and related functions
+module musica_file_dimension
 
   use musica_constants,                only : musica_dk, musica_ik
-  use musica_netcdf_variable,          only : netcdf_variable_t
-  use netcdf
+  use musica_file_variable,            only : file_variable_t
 
   implicit none
   private
 
-  public :: netcdf_dimension_t
+  public :: file_dimension_t, private_constructor
 
-  !> A NetCDF dimension
-  type :: netcdf_dimension_t
+  !> A File dimension
+  !!
+  !! File dimensions are used to define the range and boundaries of
+  !! file variables.
+  !!
+  type, abstract :: file_dimension_t
     private
-    !> NetCDF dimension id
-    integer(kind=musica_ik) :: id_ = -1
     !> All dimension values present in the file
     real(kind=musica_dk), allocatable :: values_(:)
-    !> NetCDF variable for this dimension
-    type(netcdf_variable_t) :: variable_
+    !> File variable for this dimension
+    class(file_variable_t), pointer :: variable_
   contains
     !> Gets the values for this dimension
     procedure :: get_values
@@ -32,44 +33,12 @@ module musica_netcdf_dimension
     procedure :: get_index
     !> Prints the properties of the dimension
     procedure :: print => do_print
-    !> Loads the dimension values in MUSICA units, after scaling/offsetting
-    procedure, private :: load_values
-  end type netcdf_dimension_t
-
-  !> Constructor
-  interface netcdf_dimension_t
-    module procedure :: constructor
-  end interface netcdf_dimension_t
+    !> Finalize the object
+    !! (Should only be called by final procedures of extending types)
+    procedure :: private_finalize
+  end type file_dimension_t
 
 contains
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Creates a netcdf_dimension_t object for a NetCDF dimension
-  function constructor( file, variable ) result( new_obj )
-
-    use musica_netcdf_file,            only : netcdf_file_t
-    use musica_string,                 only : string_t
-
-    !> Pointer to the new NetCDF dimension object
-    type(netcdf_dimension_t), pointer :: new_obj
-    !> NetCDF file
-    class(netcdf_file_t), intent(inout) :: file
-    !> NetCDF variable associated with the dimension
-    type(netcdf_variable_t), intent(in) :: variable
-
-    type(string_t) :: var_name
-
-    allocate( new_obj )
-    var_name = variable%name( )
-    new_obj%variable_ = variable
-    call file%check_open( )
-    call file%check_status( 140723118,                                        &
-        nf90_inq_dimid( file%id( ), var_name%to_char( ), new_obj%id_ ),       &
-        "Error finding id for dimension '"//var_name%to_char( )//"'" )
-    call new_obj%load_values( file )
-
-  end function constructor
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -78,8 +47,8 @@ contains
 
     !> Dimension values
     real(kind=musica_dk), allocatable :: values(:)
-    !> NetCDF dimension
-    class(netcdf_dimension_t), intent(in) :: this
+    !> File dimension
+    class(file_dimension_t), intent(in) :: this
 
     values = this%values_
 
@@ -104,8 +73,8 @@ contains
 
     !> Index for the closest (without going over) value
     integer(kind=musica_ik) :: index
-    !> NetCDF dimension
-    class(netcdf_dimension_t), intent(in) :: this
+    !> File dimension
+    class(file_dimension_t), intent(in) :: this
     !> Value to find
     real(kind=musica_dk), intent(in) :: value
     !> Flag indicating whether an exact match was found
@@ -169,43 +138,51 @@ contains
 
     use musica_string,                 only : to_char
 
-    !> NetCDF dimension
-    class(netcdf_dimension_t), intent(in) :: this
+    !> File dimension
+    class(file_dimension_t), intent(in) :: this
 
-    write(*,*) "*** Dimension id: "//to_char( this%id_ )//" ***"
+    write(*,*) "*** Dimension ***"
     call this%variable_%print( )
+    write(*,*) "*** End Dimension ***"
 
   end subroutine do_print
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Updates the values for the dimension from the NetCDF file
-  subroutine load_values( this, file )
+  !> Finalize the object
+  !! (Should only be called by final procedures of extending types)
+  subroutine private_finalize( this )
 
-    use musica_assert,                 only : assert
-    use musica_netcdf_file,            only : netcdf_file_t
-    use musica_string,                 only : string_t
+    !> File dimension
+    class(file_dimension_t), intent(inout) :: this
 
-    !> NetCDF dimension
-    class(netcdf_dimension_t), intent(inout) :: this
-    !> NetCDF file
-    class(netcdf_file_t), intent(inout) :: file
+    if( associated( this%variable_ ) ) deallocate( this%variable_ )
 
-    integer(kind=musica_ik) :: n_values
-    type(string_t) :: var_name
-
-    var_name = this%variable_%name( )
-    call file%check_status( 649288296,                                        &
-                            nf90_inquire_dimension( file%id( ),               &
-                                                    this%id_,                 &
-                                                    len = n_values ),         &
-                            "Error getting values for dimension '"//          &
-                            var_name%to_char( )//"'" )
-    allocate( this%values_( n_values ) )
-    call this%variable_%get_data( file, 1, n_values, this%values_ )
-
-  end subroutine load_values
+  end subroutine private_finalize
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-end module musica_netcdf_dimension
+  !> Private constructor for common data elements
+  !! (Should only be called by constructors of extending types)
+  subroutine private_constructor( this, file, variable, number_of_values )
+
+    use musica_file,                   only : file_t
+
+    !> File dimension
+    class(file_dimension_t), pointer, intent(inout) :: this
+    !> Input file
+    class(file_t), intent(inout) :: file
+    !> File variable associated with this dimension
+    class(file_variable_t), intent(in) :: variable
+    !> Number of values in the file for this dimension
+    integer(kind=musica_ik), intent(in) :: number_of_values
+
+    allocate( this%variable_, source = variable )
+    allocate( this%values_( number_of_values ) )
+    call this%variable_%get_data( file, 1, number_of_values, this%values_ )
+
+  end subroutine private_constructor
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+end module musica_file_dimension
