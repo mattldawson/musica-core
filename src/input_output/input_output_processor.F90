@@ -20,9 +20,13 @@ module musica_input_output_processor
 
   !> Input/Output processor
   !!
-  !! One input/output processor should be set up for each source/destination.
+  !! One input/output processor should be set up for each source/destination
+  !! and can be used at runtime to load model data from an external source
+  !! or output model data to an external destination. All conversions to/from
+  !! standard MUSICA units, interpolation, and user-specified data
+  !! transformations are handled by the input/output processor.
   !!
-  !! \todo add full description and examples of I/O processors
+  !! \todo add example usage for I/O processors
   !!
   type :: input_output_processor_t
     !> File attributes and functions
@@ -77,7 +81,7 @@ contains
   !! optional for output files, with the default name starting with "output"
   !! and having an appropriate file extension.
   !!
-  !! Input files require the model domain, object for mapping between model
+  !! Input files require the model domain object for mapping between model
   !! domain and file variables.
   !!
   function constructor( config, domain ) result( new_obj )
@@ -121,10 +125,6 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   !> Registers a state variable for output
-  !!
-  !! Any scaling, conversion, or interpolation for the variable should be
-  !! set up by extending types when this function is called.
-  !!
   subroutine register_output_variable( this, domain, domain_variable_name,    &
       units, io_variable_name )
 
@@ -142,7 +142,9 @@ contains
     class(domain_t), intent(inout) :: domain
     !> Variable to register
     character(len=*), intent(in) :: domain_variable_name
-    !> Units to use for intput/output data
+    !> Units to use for the intput/output data
+    !!
+    !! Conversions will be handled by the input/output processor
     character(len=*), intent(in) :: units
     !> Optional custom name to use in file
     !!
@@ -199,6 +201,7 @@ contains
   !> Get the times corresponding to entries (for input data) [s]
   !!
   !! These times include any adjustments specified in the configuration data
+  !! and should thus correspond directly to the MUSICA simulation time.
   function entry_times__s( this )
 
     !> Entry times [s]
@@ -261,7 +264,7 @@ contains
   !!
   !! Domain state variables registered with the \c input_output_processor_t
   !! type during initialization will be output for the current simulation
-  !! time.
+  !! time after conversion to the specified output units.
   !!
   subroutine output( this, time__s, domain, domain_state )
 
@@ -321,7 +324,7 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Loads input file variable names and units and id
+  !> Loads input file variable names, units, and ids
   subroutine load_input_variables( this, domain, config )
 
     use musica_assert,                 only : assert, assert_msg

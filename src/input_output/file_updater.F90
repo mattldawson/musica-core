@@ -66,7 +66,7 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Creates a MUSICA <-> File variable match
+  !> Creates an updater for a matched MUSICA <-> File variable pair
   function constructor( file, domain, variable ) result( new_obj )
 
     use musica_assert,                 only : die
@@ -223,6 +223,7 @@ contains
     if( associated( this%mutator_  ) ) deallocate( this%mutator_  )
     if( associated( this%accessor_ ) ) deallocate( this%accessor_ )
     if( associated( this%variable_ ) ) deallocate( this%variable_ )
+
   end subroutine finalize
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

@@ -24,7 +24,10 @@ module musica_file
 
   !> A Input/Output file
   !!
-  !! \todo add description and examples for file_t
+  !! Handles reading or writing to/from a file and provides information
+  !! about the structure and variables in a file.
+  !!
+  !! \todo add example usage for file_t
   !!
   type, abstract :: file_t
     private
