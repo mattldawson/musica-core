@@ -18,7 +18,7 @@ module musica_file
   !> Maximum number of IO units
   integer, parameter :: kMaxFileUnits = 200
   !> Minimum unit number
-  integer, parameter :: kMinFileUnit = 10
+  integer, parameter :: kMinFileUnit = 11
   !> Currently used file units
   logical, save :: units_used(kMaxFileUnits) = .false.
 

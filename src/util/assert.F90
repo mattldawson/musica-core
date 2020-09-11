@@ -13,6 +13,8 @@ module musica_assert
 
   implicit none
 
+  !> Unit for error output files
+  integer, parameter :: kErrorFileId = 10
   !> Error output id
   integer, parameter :: kErrorId = 0
 
@@ -41,6 +43,12 @@ contains
       write(str_code,'(i30)') code
       write(kErrorId,*) "ERROR (MusicBox-"//trim( adjustl( str_code ) )//"): "&
                         //error_message
+      open( unit = kErrorFileId, file = "error.json", action = "WRITE" )
+      write(kErrorFileId,'(A)') '{'
+      write(kErrorFileId,'(A)') '  "code" : "'//trim( adjustl( str_code ) )//'",'
+      write(kErrorFileId,'(A)') '  "message" : "'//error_message//'"'
+      write(kErrorFileId,'(A)') '}'
+      close(kErrorFileId)
       stop 3
     end if
 
