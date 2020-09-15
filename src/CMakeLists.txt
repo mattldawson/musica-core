@@ -10,6 +10,7 @@ set(MUSICA_SRC config.F90
                initial_conditions.F90
                input_output/file.F90
                input_output/file_dimension.F90
+               input_output/file_dimension_range.F90
                input_output/file_dimension_factory.F90
                input_output/file_dimensions/netcdf.F90
                input_output/file_dimensions/text.F90
@@ -22,6 +23,7 @@ set(MUSICA_SRC config.F90
                input_output/files/netcdf.F90
                input_output/files/text.F90
                input_output/input_output_processor.F90
+               grid.F90
                loss.F90
                util/array.F90
                util/assert.F90
@@ -30,6 +32,8 @@ set(MUSICA_SRC config.F90
                util/datetime.F90
                util/iterator.F90
                util/logger.F90
+               util/map.F90
+               util/math.F90
                util/string.F90)
 
 add_library(musicalib ${MUSICA_SRC})

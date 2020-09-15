@@ -155,7 +155,9 @@ contains
     type(string_t) :: file_name, io_var_name
     type(config_t) :: variable_config, temp_config
     class(file_variable_t), pointer :: new_var
+    type(file_updater_t), pointer :: updater
     type(file_updater_ptr), allocatable :: temp_updaters(:)
+    logical :: is_match
 
     file_name = this%file_%name( )
     call assert_msg( 567596084, this%file_%is_output( ),                      &
@@ -176,10 +178,11 @@ contains
     else
       io_var_name = domain_variable_name
     end if
-    new_var => file_variable_builder( variable_config, domain, this%file_,    &
-                                      io_var_name%to_char( ) )
+    new_var => file_variable_builder( variable_config, this%file_,            &
+                                      variable_name = io_var_name%to_char( ) )
+    updater => file_updater_t( this%file_, domain, new_var )
     call variable_config%finalize( )
-    call assert_msg( 987906252, associated( new_var ),                        &
+    call assert_msg( 987906252, associated( updater ),                        &
                      "Could not find domain state variable '"//               &
                      domain_variable_name//"' to register as '"//             &
                      io_var_name%to_char( )//"' in output file '"//           &
@@ -190,8 +193,8 @@ contains
     allocate( this%updaters_( size( temp_updaters ) + 1 ) )
     this%updaters_( 1:size( temp_updaters ) ) = temp_updaters(:)
     deallocate( temp_updaters )
-    this%updaters_( size( this%updaters_ ) )%val_ =>                        &
-        file_updater_t( this%file_, domain, new_var )
+    this%updaters_( size( this%updaters_ ) )%val_ => updater
+    updater => null( )
     deallocate( new_var )
 
   end subroutine register_output_variable
@@ -344,7 +347,9 @@ contains
     type(config_t), intent(inout) :: config
 
     character(len=*), parameter :: my_name = "Load input file variables"
+    logical :: is_match
     type(string_t) :: file_name
+    type(file_updater_t), pointer :: updater
     integer(kind=musica_ik) :: n_dims, n_vars, i_var, n_match, i_match
     type(file_variable_ptr), allocatable :: vars(:)
 
@@ -355,12 +360,16 @@ contains
     allocate( vars( n_vars ) )
     n_match = 0
     do i_var = 1, n_vars
-    vars( i_var )%val_ =>                                                     &
-        file_variable_builder( config, domain, this%file_,                    &
-                               variable_id = i_var )
-      if( associated( vars( i_var )%val_ ) ) then
-        if( vars( i_var )%val_%musica_name( ) .eq. "time" ) cycle
+      vars( i_var )%val_ =>                                                   &
+          file_variable_builder( config, this%file_, variable_id = i_var )
+      updater => file_updater_t( this%file_, domain, vars( i_var )%val_ )
+      if( associated( updater ) ) then
+        deallocate( updater )
         n_match = n_match + 1
+      else
+        if( vars( i_var )%val_%musica_name( ) .eq. "time" ) cycle
+        deallocate( vars( i_var )%val_ )
+        vars( i_var )%val_ => null( )
       end if
     end do
     if( allocated( this%updaters_ ) ) deallocate( this%updaters_ )
@@ -369,6 +378,7 @@ contains
     do i_var = 1, n_vars
       if( associated( vars( i_var )%val_ ) ) then
         if( vars( i_var )%val_%musica_name( ) .eq. "time" ) then
+          call vars( i_var )%val_%set_musica_units( "s" )
           this%time_ =>                                                       &
               file_dimension_builder( config, this%file_, vars( i_var )%val_ )
           cycle

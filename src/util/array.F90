@@ -13,7 +13,7 @@ module musica_array
   private
 
   public :: add_to_array, find_string_in_array, find_string_in_split_array,   &
-            merge_series
+            merge_series, calculate_linear_array, calculate_logarithmic_array
 
   !> Add to array interface
   interface add_to_array
@@ -452,6 +452,74 @@ contains
     end do
 
   end function merge_series
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Allocates and calculates an array of linearly increasing value with
+  !! specified minimum and maximum values and number of elements
+  function calculate_linear_array( minimum, maximum, number_of_elements )     &
+      result( new_array )
+
+    use musica_assert,                 only : assert
+
+    !> Calculated array
+    real(kind=musica_dk), allocatable :: new_array(:)
+    !> Minimum array value
+    real(kind=musica_dk), intent(in) :: minimum
+    !> Maximum array value
+    real(kind=musica_dk), intent(in) :: maximum
+    !> Number of array elements
+    integer(kind=musica_ik), intent(in) :: number_of_elements
+
+    integer(kind=musica_ik) :: i_elem
+    real(kind=musica_dk) :: space
+
+    call assert( 167917803, maximum .gt. minimum )
+    call assert( 211868975, number_of_elements .ge. 1 )
+    allocate( new_array( number_of_elements ) )
+    space = ( maximum - minimum ) /                                           &
+            real( number_of_elements - 1, kind=musica_dk )
+    new_array( 1 ) = minimum
+    do i_elem = 2, number_of_elements - 1
+      new_array( i_elem ) = new_array( i_elem - 1 ) + space
+    end do
+    new_array( number_of_elements ) = maximum
+
+  end function calculate_linear_array
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Allocates and calculates an array of logarithmically increasing value
+  !! with specified minimum and maximum values and number of elements
+  function calculate_logarithmic_array( minimum, maximum, number_of_elements )&
+      result( new_array )
+
+    use musica_assert,                 only : assert
+
+    !> Calculated array
+    real(kind=musica_dk), allocatable :: new_array(:)
+    !> Minimum array value
+    real(kind=musica_dk), intent(in) :: minimum
+    !> Maximum array value
+    real(kind=musica_dk), intent(in) :: maximum
+    !> Number of array elements
+    integer(kind=musica_ik), intent(in) :: number_of_elements
+
+    integer(kind=musica_ik) :: i_elem
+    real(kind=musica_dk) :: space
+
+    call assert( 527530853, maximum .gt. minimum )
+    call assert( 752167543, number_of_elements .gt. 1 )
+    allocate( new_array( number_of_elements ) )
+    space = ( log( maximum ) - log( minimum ) ) /                             &
+            real( number_of_elements - 1, kind=musica_dk )
+    new_array( 1 ) = minimum
+    do i_elem = 2, number_of_elements - 1
+      new_array( i_elem ) = exp( log( new_array( i_elem - 1 ) ) + space )
+    end do
+    new_array( number_of_elements ) = maximum
+
+  end function calculate_logarithmic_array
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 

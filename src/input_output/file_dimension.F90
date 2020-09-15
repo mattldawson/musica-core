@@ -8,12 +8,14 @@
 module musica_file_dimension
 
   use musica_constants,                only : musica_dk, musica_ik
+  use musica_file_dimension_range,     only : file_dimension_range_t
   use musica_file_variable,            only : file_variable_t
+  use musica_string,                   only : string_t
 
   implicit none
   private
 
-  public :: file_dimension_t, private_constructor
+  public :: file_dimension_t
 
   !> A File dimension
   !!
@@ -22,23 +24,48 @@ module musica_file_dimension
   !!
   type, abstract :: file_dimension_t
     private
+    !> Dimension name
+    type(string_t) :: name_
+    !> Dimension size
+    type(file_dimension_range_t) :: range_
     !> All dimension values present in the file
     real(kind=musica_dk), allocatable :: values_(:)
     !> File variable for this dimension
-    class(file_variable_t), pointer :: variable_
+    class(file_variable_t), pointer :: variable_ => null( )
   contains
+    !> Name of the dimension
+    procedure :: name => get_name
     !> Gets the values for this dimension
     procedure :: get_values
     !> Gets the index for a given dimesion value
     procedure :: get_index
+    !> Gets the dimension range
+    procedure :: get_range
     !> Prints the properties of the dimension
     procedure :: print => do_print
+    !> Private constructor
+    !! (Should only be called by constructors of extending types)
+    procedure :: private_constructor
     !> Finalize the object
     !! (Should only be called by final procedures of extending types)
     procedure :: private_finalize
   end type file_dimension_t
 
 contains
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Gets the name of the dimension
+  function get_name( this )
+
+    !> Dimension name
+    type(string_t) :: get_name
+    !> File dimension
+    class(file_dimension_t), intent(in) :: this
+
+    get_name = this%name_
+
+  end function get_name
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -133,16 +160,30 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+  !> Get the range for this dimension
+  function get_range( this )
+
+    use musica_assert,                 only : assert
+
+    !> Dimension range
+    type(file_dimension_range_t) :: get_range
+    !> Dimension
+    class(file_dimension_t), intent(in) :: this
+
+    get_range = this%range_
+
+  end function get_range
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
   !> Prints the properties of the dimension
   subroutine do_print( this )
-
-    use musica_string,                 only : to_char
 
     !> File dimension
     class(file_dimension_t), intent(in) :: this
 
     write(*,*) "*** Dimension ***"
-    call this%variable_%print( )
+    if( associated( this%variable_ ) ) call this%variable_%print( )
     write(*,*) "*** End Dimension ***"
 
   end subroutine do_print
@@ -164,22 +205,32 @@ contains
 
   !> Private constructor for common data elements
   !! (Should only be called by constructors of extending types)
-  subroutine private_constructor( this, file, variable, number_of_values )
+  subroutine private_constructor( this, dimension_name, file, range, variable )
 
+    use musica_assert,                 only : assert_msg
     use musica_file,                   only : file_t
 
     !> File dimension
-    class(file_dimension_t), pointer, intent(inout) :: this
+    class(file_dimension_t), intent(inout) :: this
+    !> Dimension name
+    type(string_t), intent(in) :: dimension_name
     !> Input file
     class(file_t), intent(inout) :: file
+    !> Dimension boundaries
+    type(file_dimension_range_t), intent(in) :: range
     !> File variable associated with this dimension
-    class(file_variable_t), intent(in) :: variable
-    !> Number of values in the file for this dimension
-    integer(kind=musica_ik), intent(in) :: number_of_values
+    class(file_variable_t), intent(in), optional :: variable
 
-    allocate( this%variable_, source = variable )
-    allocate( this%values_( number_of_values ) )
-    call this%variable_%get_data( file, 1, number_of_values, this%values_ )
+    type(file_dimension_range_t) :: ranges(1)
+
+    this%name_  = dimension_name
+    this%range_ = range
+    if( present( variable ) ) then
+      allocate( this%variable_, source = variable )
+      allocate( this%values_( range%lower_bound( ) : range%upper_bound( ) ) )
+      ranges(1) = range
+      call this%variable_%get_data( file, ranges, this%values_ )
+    end if
 
   end subroutine private_constructor
 

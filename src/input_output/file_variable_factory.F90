@@ -28,12 +28,11 @@ contains
   !! - "csv", "txt", or "text" (a delimited text file)
   !! - "nc" or "netcdf" (a NetCDF file)
   !!
-  function file_variable_builder( config, domain, file, variable_name,        &
-      variable_id ) result( new_variable )
+  function file_variable_builder( config, file, variable_name, variable_id,   &
+      found ) result( new_variable )
 
     use musica_assert,                 only : assert_msg, die, die_msg
     use musica_config,                 only : config_t
-    use musica_domain,                 only : domain_t
     use musica_file,                   only : file_t
     use musica_string,                 only : string_t
 
@@ -41,18 +40,20 @@ contains
     class(file_variable_t), pointer :: new_variable
     !> Dimension configuration
     class(config_t), intent(inout) :: config
-    !> MUSICA domain
-    class(domain_t), intent(inout) :: domain
     !> Input/Output file
     class(file_t), intent(inout) :: file
     !> Variable name
     character(len=*), intent(in), optional :: variable_name
     !> Variable ID
     integer(kind=musica_ik), intent(in), optional :: variable_id
+    !> Optional flag that indicates whether the variable was found in the
+    !! file
+    logical, intent(out), optional :: found
 
     type(string_t) :: file_type
     character(len=*), parameter :: my_name = 'File variable builder'
 
+    if( present( found ) ) found = .true.
     call assert_msg( 379618774,                                               &
                      present( variable_name ) .neqv. present( variable_id ),  &
                      "Either a variable name or a variable id must be "//     &
@@ -66,22 +67,20 @@ contains
         file_type .eq. 'text' .or.                                            &
         file_type .eq. 'csv' ) then
       if( present( variable_name ) ) then
-        new_variable => file_variable_text_t( domain, file, variable_name,    &
-                                              config )
+        new_variable => file_variable_text_t( file, variable_name, config,    &
+                                              found = found )
       else if( present( variable_id ) ) then
-        new_variable => file_variable_text_t( domain, file, variable_id,      &
-                                              config )
+        new_variable => file_variable_text_t( file, variable_id, config )
       else
         call die( 284671798 )
       end if
     else if( file_type .eq. 'nc' .or.                                         &
              file_type .eq. 'netcdf' ) then
       if( present( variable_name ) ) then
-        new_variable => file_variable_netcdf_t( domain, file, variable_name,  &
-                                              config )
+        new_variable => file_variable_netcdf_t( file, variable_name, config,  &
+                                                found = found )
       else if( present( variable_id ) ) then
-        new_variable => file_variable_netcdf_t( domain, file, variable_id,    &
-                                              config )
+        new_variable => file_variable_netcdf_t( file, variable_id, config )
       else
         call die( 788424964 )
       end if

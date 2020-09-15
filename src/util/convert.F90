@@ -8,7 +8,7 @@
 !! and non-standard MUSICA units
 module musica_convert
 
-  use musica_constants,                only : dk => musica_dk
+  use musica_constants,                only : dk => musica_dk, ik => musica_ik
   use musica_string,                   only : string_t
 
   implicit none
@@ -80,6 +80,8 @@ module musica_convert
   !!   6.5000000000000000       UTC [s] is    51148.969118829657       LST [s] at    146.90637458350079       deg W
   !! \endcode
   !!
+  !! \todo Update setup functions to ignore order of base units in
+  !!       mutli-component units (e.g., "mol s-1" and "s-1 mol")
   type :: convert_t
     private
     !> Conversion type
@@ -107,6 +109,8 @@ module musica_convert
     procedure :: set_up_for_s
     procedure :: set_up_for_mol_per_m3_per_s
     procedure :: set_up_for_per_s
+    procedure :: set_up_for_m
+    procedure :: set_up_for_unitless
     !> @}
   end type convert_t
 
@@ -123,7 +127,6 @@ contains
   !> Constructor that accepts character arrays
   function constructor_char_str( standard_units, non_standard_units )         &
       result( new_obj )
-
 
     !> New conversion
     type(convert_t) :: new_obj
@@ -145,7 +148,6 @@ contains
   function constructor_str_char( standard_units, non_standard_units )         &
       result( new_obj )
 
-
     !> New conversion
     type(convert_t) :: new_obj
     !> Standard units
@@ -165,7 +167,6 @@ contains
   !> Constructor that accepts character arrays
   function constructor_char( standard_units, non_standard_units )             &
       result( new_obj )
-
 
     !> New conversion
     type(convert_t) :: new_obj
@@ -215,6 +216,10 @@ contains
       call new_obj%set_up_for_mol_per_m3_per_s( non_std )
     else if( std .eq. "s-1" ) then
       call new_obj%set_up_for_per_s( non_std )
+    else if( std .eq. "m" ) then
+      call new_obj%set_up_for_m( non_std )
+    else if( std .eq. "unitless" ) then
+      call new_obj%set_up_for_unitless( non_std )
     else
       call die_msg( 224485497,                                                &
                     "Invalid standard units: '"//standard_units%to_char( )    &
@@ -642,6 +647,64 @@ contains
     this%scale_factor_ = 1.0_dk / this%scale_factor_
 
   end subroutine set_up_for_per_s
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Sets up a conversion for lengths [m]
+  subroutine set_up_for_m( this, non_standard )
+
+    use musica_assert,                 only : die_msg
+
+    !> Converter
+    class(convert_t), intent(inout) :: this
+    !> Non-standard units
+    type(string_t), intent(in) :: non_standard
+
+    this%conversion_type_ = kScaleThenOffset
+    if( non_standard .eq. "m" ) then
+      return
+    else if( non_standard .eq. "dm" ) then
+      this%scale_factor_ = 10.0_dk
+      return
+    else if( non_standard .eq. "cm" ) then
+      this%scale_factor_ = 100.0_dk
+      return
+    else if( non_standard .eq. "mm" ) then
+      this%scale_factor_ = 1000.0_dk
+      return
+    else if( non_standard .eq. "um" ) then
+      this%scale_factor_ = 1.0e6_dk
+      return
+    else if( non_standard .eq. "nm" ) then
+      this%scale_factor_ = 1.0e9_dk
+      return
+    else
+      call die_msg( 333030831, "Invalid non-standard units for conversion "// &
+                    "to m: '"//non_standard%to_char( )//"'" )
+    end if
+
+  end subroutine set_up_for_m
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Sets up a conversion for unitless values (conversion is always 1:1)
+  subroutine set_up_for_unitless( this, non_standard )
+
+    use musica_assert,                 only : assert_msg
+
+    !> Converter
+    class(convert_t), intent(inout) :: this
+    !> Non-standard units
+    type(string_t), intent(in) :: non_standard
+
+    this%conversion_type_ = kScaleThenOffset
+    call assert_msg( 952748238, non_standard .eq. "unitless" .or.             &
+                                non_standard .eq. "none" .or.                 &
+                                non_standard .eq. "",                         &
+                     "Invalid non-standard units for conversion to "//        &
+                     "unitless: '"//non_standard%to_char( )//"'" )
+
+  end subroutine set_up_for_unitless
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 

@@ -34,4 +34,9 @@ add_std_test(config)
 add_executable(domain_cell domains/cell.F90)
 add_std_test(domain_cell)
 
+add_executable(grid_example
+               examples/O2_effective_cross_sections/O2_optics.F90
+               examples/O2_effective_cross_sections/test_grid_example.F90)
+add_std_test(grid_example)
+
 ################################################################################

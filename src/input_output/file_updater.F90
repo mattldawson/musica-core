@@ -20,7 +20,7 @@ module musica_file_updater
   !> Max length of staged data array
   integer(kind=musica_ik), parameter :: kMaxStagedData = 100
 
-  !> Updater for a paired MUSICA <->  variable
+  !> Updater for a paired MUSICA <-> file variable
   !!
   !! Staging data and functions for updating MUSICA state variables from input
   !! data and updating output files from the MUSICA state.
@@ -67,6 +67,10 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   !> Creates an updater for a matched MUSICA <-> File variable pair
+  !!
+  !! If the file variable cannot be matched to a MUSICA domain variable, a
+  !! null pointer is returned.
+  !!
   function constructor( file, domain, variable ) result( new_obj )
 
     use musica_assert,                 only : die
@@ -89,7 +93,15 @@ contains
 
     allocate( new_obj )
     allocate( new_obj%variable_, source = variable )
-    var_name = variable%musica_name( )
+
+    ! Find or create domain variables
+    if( .not. do_match( domain, new_obj%variable_ ) ) then
+      deallocate( new_obj )
+      new_obj => null( )
+      return
+    end if
+
+    var_name = new_obj%variable_%musica_name( )
     std_units = domain%cell_state_units( var_name%to_char( ) )
     if( file%is_input( ) ) then
       new_obj%mutator_ => domain%cell_state_mutator( var_name%to_char( ),     & !- state variable name
@@ -146,6 +158,7 @@ contains
     use musica_domain,                 only : domain_t, domain_state_t,       &
                                               domain_iterator_t
     use musica_file,                   only : file_t
+    use musica_file_dimension_range,   only : file_dimension_range_t
 
     !> File updater
     class(file_updater_t), intent(inout) :: this
@@ -161,11 +174,12 @@ contains
     class(domain_iterator_t), intent(inout) :: iterator
 
     real(kind=musica_dk) :: state_value
+    type(file_dimension_range_t) :: indices(0)
 
     call iterator%reset( )
     if( iterator%next( ) ) then
       call domain_state%get( iterator, this%accessor_, state_value )
-      call this%variable_%output( file, time__s, state_value )
+      call this%variable_%output( file, time__s, indices, state_value )
     end if
     call assert_msg( 608265274, .not. iterator%next( ), "Output files are "// &
                      "not yet set up for multiple cells." )
@@ -189,8 +203,9 @@ contains
   !> Updates the staged data to start from a given index
   subroutine update_staged_data( this, file, index )
 
-    use musica_assert,                 only : assert
+    use musica_assert,                 only : assert, assert_msg
     use musica_file,                   only : file_t
+    use musica_file_dimension_range,   only : file_dimension_range_t
 
     !> File updater
     class(file_updater_t), intent(inout) :: this
@@ -200,13 +215,17 @@ contains
     integer(kind=musica_ik), intent(in) :: index
 
     integer(kind=musica_ik) :: n_times
+    type(file_dimension_range_t), allocatable :: var_dims(:)
 
-    n_times = min( kMaxStagedData,                                            &
-                   this%variable_%time_dimension_size( ) - index + 1 )
+    var_dims = this%variable_%get_dimensions( )
+    call assert_msg( 301384964, size( var_dims ) .eq. 1, "File variables "//  &
+                     "are currently restricted to one dimension." )
+    n_times = min( kMaxStagedData, var_dims(1)%upper_bound( ) - index + 1 )
     call file%check_open( )
     call assert( 382334001, index .gt. 0 .and. n_times .ge. 1 )
     this%staged_data_(:) = -huge( 1.0_musica_dk )
-    call this%variable_%get_data( file, index, n_times, this%staged_data_ )
+    call var_dims(1)%set( index, index + n_times - 1 )
+    call this%variable_%get_data( file, var_dims(1:1), this%staged_data_ )
     this%first_staged_index_ = index
     this%number_staged_      = n_times
 
@@ -225,6 +244,49 @@ contains
     if( associated( this%variable_ ) ) deallocate( this%variable_ )
 
   end subroutine finalize
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Attemps to find a domain state variable for a given file variable. For
+  !! certain file variables a domain state variable is created.
+  !!
+  logical function do_match( domain, variable )
+
+    use musica_domain,                 only : domain_t
+    use musica_string,                 only : string_t
+
+    !> MUSICA domain
+    class(domain_t), intent(inout) :: domain
+    !> File variable
+    class(file_variable_t), intent(inout) :: variable
+
+    character(len=*), parameter :: my_name = "File variable matcher"
+    type(string_t) :: musica_name, musica_units
+
+    musica_name = variable%musica_name( )
+
+    ! create state variables for emissions and loss rates
+    if( musica_name%substring( 1, 15 ) .eq. "emission_rates%" ) then
+      call domain%register_cell_state_variable( musica_name%to_char( ),       & !- state variable name
+                                                "mol m-3 s-1",                & !- MUSICA units
+                                                0.0d0,                        & !- default units
+                                                my_name )
+    else if( musica_name%substring( 1, 20 ) .eq. "loss_rate_constants%" ) then
+      call domain%register_cell_state_variable( musica_name%to_char( ),       & !- state variable name
+                                                "s-1",                        & !- MUSICA units
+                                                0.0d0,                        & !- default value
+                                                my_name )
+    end if
+
+    ! look for state variables
+    do_match = domain%is_cell_state_variable( musica_name%to_char( ) )
+
+    if( do_match ) then
+      musica_units = domain%cell_state_units( musica_name%to_char( ) )
+      call variable%set_musica_units( musica_units%to_char( ) )
+    end if
+
+  end function do_match
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 

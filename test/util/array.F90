@@ -4,7 +4,7 @@
 !> Tests for the musica_array module
 program test_util_array
 
-  use musica_assert,                   only : assert
+  use musica_assert,                   only : assert, almost_equal
   use musica_array
   use musica_constants,                only : musica_ik, musica_rk, musica_dk
   use musica_string,                   only : string_t
@@ -111,6 +111,25 @@ contains
     call assert( 160003772,       bool_array( 1 ) )
     call assert( 272322117, .not. bool_array( 2 ) )
     call assert( 667115711,       bool_array( 3 ) )
+
+    if( allocated( dbl_array ) ) deallocate( dbl_array )
+    dbl_array = calculate_linear_array( 1.0_musica_dk, 5.0_musica_dk, 5 )
+    call assert( 781682679, size( dbl_array ) .eq. 5 )
+    call assert( 106319370, dbl_array( 1 ) .eq. 1.0_musica_dk )
+    call assert( 824180612, almost_equal( dbl_array( 2 ), 2.0_musica_dk ) )
+    call assert( 654023708, almost_equal( dbl_array( 3 ), 3.0_musica_dk ) )
+    call assert( 201391555, almost_equal( dbl_array( 4 ), 4.0_musica_dk ) )
+    call assert( 996243050, dbl_array( 5 ) .eq. 5.0_musica_dk )
+
+    if( allocated( dbl_array ) ) deallocate( dbl_array )
+    dbl_array =                                                               &
+        calculate_logarithmic_array( 1.0_musica_dk, 10000.0_musica_dk, 5 )
+    call assert( 764888814, size( dbl_array ) .eq. 5 )
+    call assert( 312256661, dbl_array( 1 ) .eq. 1.0_musica_dk )
+    call assert( 142099757, almost_equal( dbl_array( 2 ), 10.0_musica_dk ) )
+    call assert( 589467603, almost_equal( dbl_array( 3 ), 100.0_musica_dk ) )
+    call assert( 136835450, almost_equal( dbl_array( 4 ), 1000.0_musica_dk ) )
+    call assert( 931686945, dbl_array( 5 ) .eq. 10000.0_musica_dk )
 
   end subroutine test_array_functions
 
