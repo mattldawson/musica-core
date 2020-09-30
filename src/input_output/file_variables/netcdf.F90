@@ -8,6 +8,7 @@
 module musica_file_variable_netcdf
 
   use musica_constants,                only : musica_dk, musica_ik
+  use musica_file_dimension_range,     only : file_dimension_range_t
   use musica_file_variable,            only : file_variable_t
 
   implicit none
@@ -25,12 +26,12 @@ module musica_file_variable_netcdf
     !> NetCDF variable id
     integer(kind=musica_ik) :: id_ = -1
     !> Variable dimensions
-    integer(kind=musica_ik) :: dimensions_(1) = (/ 0 /)
+    type(file_dimension_range_t), allocatable :: dimensions_(:)
   contains
     !> Returns the NetCDF variable id
     procedure :: id
-    !> Gets the number of entries for the variable in the temporal dimension
-    procedure :: time_dimension_size
+    !> Gets the variable dimensions
+    procedure :: get_dimensions
     !> Gets a sub-set of the variable data for a specified index range
     !!
     !! Data are returned after applying conversions set up during
@@ -55,23 +56,17 @@ contains
   !> Creates a file_variable_netcdf_t object for an existing NetCDF variable
   !> by name
   !!
-  !! If no matching state variable is found in the MUSICA domain, a null
-  !! pointer is returned.
-  !!
-  function constructor_name( domain, file, variable_name, config )            &
+  function constructor_name( file, variable_name, config, found )             &
       result( new_obj )
 
     use musica_assert,                 only : die
     use musica_config,                 only : config_t
-    use musica_domain,                 only : domain_t
     use musica_file,                   only : file_t
     use musica_file_netcdf,            only : file_netcdf_t
     use netcdf,                        only : nf90_inq_varid
 
     !> New NetCDF variable
     class(file_variable_t), pointer :: new_obj
-    !> MUSICA domain
-    class(domain_t), intent(inout) :: domain
     !> NetCDF file
     class(file_t), intent(inout) :: file
     !> Variable name
@@ -80,9 +75,19 @@ contains
     !!
     !! If omitted, standard matching is applied
     class(config_t), intent(inout), optional :: config
+    !> Optional flag that indicates whether the variable was found in the file
+    logical, intent(out), optional :: found
 
     integer(kind=musica_ik) :: variable_id
 
+    if( present( found ) ) then
+      if( file%is_file_variable( variable_name ) ) then
+        found = .true.
+      else
+        found = .false.
+        return
+      end if
+    end if
     select type( file )
     class is( file_netcdf_t )
       call file%check_open( )
@@ -92,7 +97,7 @@ contains
     class default
       call die( 952578143 )
     end select
-    new_obj => constructor_id( domain, file, variable_id, config )
+    new_obj => constructor_id( file, variable_id, config = config )
 
   end function constructor_name
 
@@ -101,20 +106,15 @@ contains
   !> Creates a file_variable_netcdf_t object for an existing NetCDF variable
   !> by id
   !!
-  !! If no matching state variable is found in the MUSICA domain, a null
-  !! pointer is returned.
-  !!
-  function constructor_id( domain, file, variable_id, config )                &
-      result( new_obj )
+  function constructor_id( file, variable_id, config ) result( new_obj )
 
     use musica_assert,                 only : assert_msg, die
     use musica_config,                 only : config_t
-    use musica_domain,                 only : domain_t
     use musica_file,                   only : file_t
     use musica_file_netcdf,            only : file_netcdf_t
-    use musica_file_variable,          only : private_constructor
     use musica_string,                 only : string_t, to_char
     use netcdf,                        only : NF90_MAX_NAME,                  &
+                                              nf90_inquire,                   &
                                               nf90_inquire_variable,          &
                                               nf90_inquire_dimension,         &
                                               nf90_inq_attname,               &
@@ -122,8 +122,6 @@ contains
 
     !> New NetCDF variable
     class(file_variable_t), pointer :: new_obj
-    !> MUSICA domain
-    class(domain_t), intent(inout) :: domain
     !> NetCDF file
     class(file_t), intent(inout) :: file
     !> Variable ID
@@ -133,9 +131,12 @@ contains
     !! If omitted, standard matching is applied
     class(config_t), intent(inout), optional :: config
 
-    character(len=NF90_MAX_NAME) :: name, units
+    character(len=NF90_MAX_NAME) :: name, units, dim_name
     type(string_t) :: file_name, att_name, var_name, var_units
-    integer(kind=musica_ik) :: dimids(1), n_values, i_att, n_attributes
+    type(string_t), allocatable :: dimension_names(:)
+    integer(kind=musica_ik) :: n_values, i_att, n_attributes, unlimited_dimid,&
+                               i_dim, n_dims
+    integer(kind=musica_ik), allocatable :: dimids(:)
 
     allocate( file_variable_netcdf_t :: new_obj )
 
@@ -145,24 +146,43 @@ contains
       class is( file_netcdf_t )
         file_name = file%name( )
         call file%check_open( )
+        call file%check_status( 404330062,                                    &
+                                nf90_inquire_variable( file%id( ),            &
+                                                       variable_id,           &
+                                                       ndims = n_dims ),      &
+                                "Error getting number of dimensions for "//   &
+                                "id: "//to_char( variable_id ) )
+        allocate( dimids( n_dims ) )
         call file%check_status( 206732462,                                    &
-                            nf90_inquire_variable( file%id( ),                &
-                                                   variable_id,               &
-                                                   name = name,               &
-                                                   dimids = dimids,           &
-                                                   nAtts = n_attributes ),    &
+                                nf90_inquire_variable( file%id( ),            &
+                                                       variable_id,           &
+                                                       name = name,           &
+                                                       dimids = dimids,       &
+                                                       nAtts = n_attributes ),&
                             "Error getting variable information for id: "//   &
-                            to_char( variable_id )//"'" )
+                            to_char( variable_id ) )
         var_name    = name
         var_units   = ""
         new_obj%id_ = variable_id
-        call file%check_status( 661270149,                                    &
-                            nf90_inquire_dimension( file%id( ),               &
-                                                    dimids(1),                &
-                                                    len = n_values ),         &
-                            "Error getting dimensions of variable '"//        &
-                            var_name%to_char( )//"'" )
-        new_obj%dimensions_(1) = n_values
+        allocate( new_obj%dimensions_( size( dimids ) ) )
+        call file%check_status( 683946769,                                    &
+                                nf90_inquire( file%id( ),                     &
+                                          unlimiteddimid = unlimited_dimid ), &
+                                "Error getting unlimited dimension id" )
+        allocate( dimension_names( size( dimids ) ) )
+        do i_dim = 1, size( dimids )
+          call file%check_status( 661270149,                                  &
+                              nf90_inquire_dimension( file%id( ),             &
+                                                      dimids( i_dim ),        &
+                                                      name = dim_name,        &
+                                                      len = n_values ),       &
+                              "Error getting dimensions of variable '"//      &
+                              var_name%to_char( )//"'" )
+          dimension_names( i_dim ) = dim_name
+          new_obj%dimensions_( i_dim ) =                                      &
+              file_dimension_range_t( dimids( i_dim ), 1, n_values,           &
+                      is_unlimited = ( dimids( i_dim ) .eq. unlimited_dimid ) )
+        end do
         do i_att = 1, n_attributes
           call file%check_status( 485848938,                                  &
                               nf90_inq_attname( file%id( ),                   &
@@ -193,8 +213,8 @@ contains
       call die( 857053663 )
     end select
 
-    call private_constructor( new_obj, config, file, domain, var_name,        &
-                              units = var_units )
+    call new_obj%private_constructor( config, file, var_name, dimension_names,&
+                                      units = var_units )
 
   end function constructor_id
 
@@ -212,15 +232,17 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Gets the number of entries of the variable in the temporal dimension
-  integer(kind=musica_ik) function time_dimension_size( this )
+  !> Gets the variable dimensions
+  function get_dimensions( this ) result( dimensions )
 
+    !> Variable dimensions
+    type(file_dimension_range_t), allocatable :: dimensions(:)
     !> NetCDF variable
     class(file_variable_netcdf_t), intent(in) :: this
 
-    time_dimension_size = this%dimensions_(1)
+    dimensions = this%dimensions_
 
-  end function time_dimension_size
+  end function get_dimensions
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -228,9 +250,9 @@ contains
   !!
   !! Applies any necessary conversions to the raw input data
   !!
-  subroutine get_data( this, file, start, count, values )
+  subroutine get_data( this, file, range, values )
 
-    use musica_assert,                 only : die
+    use musica_assert,                 only : assert, die, die_msg
     use musica_file,                   only : file_t
     use musica_file_netcdf,            only : file_netcdf_t
     use netcdf,                        only : nf90_get_var
@@ -239,22 +261,67 @@ contains
     class(file_variable_netcdf_t), intent(in) :: this
     !> NetCDF file
     class(file_t), intent(inout) :: file
-    !> Starting index for returned data
-    integer(kind=musica_ik), intent(in) :: start
-    !> Number of data points to return
-    integer(kind=musica_ik), intent(in) :: count
+    !> Range of data to return
+    !!
+    !! Only one range in the array is permitted to have size > 1, so that
+    !! results are always returned as a rank 1 array
+    !!
+    class(file_dimension_range_t), intent(in) :: range(:)
     !> Values to return
-    real(kind=musica_dk), intent(out) :: values(count)
+    real(kind=musica_dk), target, intent(out) :: values(:)
 
-    integer(kind=musica_ik) :: l_count(1), l_start(1), i_val
+    real(kind=musica_dk), pointer :: v2(:,:), v3(:,:,:), v4(:,:,:,:)
+    integer(kind=musica_ik), allocatable :: n_values(:), start(:)
+    integer(kind=musica_ik) :: i_val, i_dim, j_dim, temp
+    logical :: found
 
     select type( file )
     class is( file_netcdf_t )
-    l_start(1) = start
-    l_count(1) = count
-    call file%check_status( 448163017, nf90_get_var( file%id( ), this%id_,    &
-                                                   values, l_start, l_count ),&
-                            "Error getting values for NetCDF variable" )
+    allocate( start(    size( this%dimensions_ ) ) )
+    allocate( n_values( size( this%dimensions_ ) ) )
+    call assert( 448155683, size( this%dimensions_ ) .eq. size( range ) )
+    do i_dim = 1, size( range )
+      found = .false.
+      do j_dim = 1, size( this%dimensions_ )
+        if( range( i_dim ) .eq. this%dimensions_( j_dim ) ) then
+          found = .true.
+          start(    j_dim ) = range( i_dim )%lower_bound( )
+          n_values( j_dim ) = range( i_dim )%upper_bound( ) -                 &
+                              start( j_dim ) + 1
+          exit
+        end if
+      end do
+      call assert( 205271889, found )
+    end do
+    temp = 1
+    do i_dim = 1, size( n_values )
+      temp = temp * n_values( i_dim )
+    end do
+    call assert( 509603293, temp .eq. size( values ) )
+    if( size( n_values ) .eq. 1 ) then
+      call file%check_status( 448163017, nf90_get_var( file%id( ), this%id_,  &
+                                                       values, start,         &
+                                                       n_values ),            &
+                              "Error getting values for NetCDF variable" )
+    else if( size( n_values ) .eq. 2 ) then
+      v2( 1:n_values(1), 1:n_values(2) ) => values
+      call file%check_status( 689836516, nf90_get_var( file%id( ), this%id_,  &
+                                                       v2, start, n_values ), &
+                              "Error getting values for NetCDF variable" )
+    else if( size( n_values ) .eq. 3 ) then
+      v3( 1:n_values(1), 1:n_values(2), 1:n_values(3) ) => values
+      call file%check_status( 184630111, nf90_get_var( file%id( ), this%id_,  &
+                                                       v3, start, n_values ), &
+                              "Error getting values for NetCDF variable" )
+    else if( size( n_values ) .eq. 4 ) then
+      v4( 1:n_values(1), 1:n_values(2), 1:n_values(3), 1:n_values(4) ) => values
+      call file%check_status( 574159398, nf90_get_var( file%id( ), this%id_,  &
+                                                       v4, start, n_values ), &
+                              "Error getting values for NetCDF variable" )
+    else
+      call die_msg( 468558599, "NetCDF variables about 4 dimensions are "//   &
+                    "not yet supported." )
+    end if
     call this%convert_to_musica_values( values )
     class default
       call die( 636979049 )
@@ -269,7 +336,8 @@ contains
   !! The state_value will be converted according to the variable configuration
   !! prior to outputting it to the file.
   !!
-  subroutine output( this, file, time__s, state_value )
+  subroutine output( this, file, unlimited_dimension_value, indices,          &
+      state_value )
 
     use musica_assert,                 only : die_msg
     use musica_file,                   only : file_t
@@ -278,8 +346,10 @@ contains
     class(file_variable_netcdf_t), intent(inout) :: this
     !> Output file
     class(file_t), intent(inout) :: file
-    !> Current simulation time [s]
-    real(kind=musica_dk), intent(in) :: time__s
+    !> Unlimited dimension value
+    real(kind=musica_dk), intent(in) :: unlimited_dimension_value
+    !> Indices of data point to output in all non-unlimited dimensions
+    class(file_dimension_range_t), intent(in) :: indices(:)
     !> Value to output
     real(kind=musica_dk), intent(in) :: state_value
 
@@ -305,7 +375,6 @@ contains
     write(*,*) "*** Variable: "//var_name%to_char( )//" ***"
     write(*,*) "MUSICA name: "//musica_name%to_char( )
     write(*,*) "NetCDF variable id:", this%id_
-    write(*,*) "dimension sizes:", this%dimensions_
     write(*,*) "units: "//units%to_char( )
 
   end subroutine do_print

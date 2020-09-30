@@ -529,20 +529,79 @@ contains
     call assert( 522143041, a%to_standard( ra ) .eq. ra )
     call assert( 715171741, a%standard_units( ) .eq. 's-1' )
 
-    a = convert_t( "s-1", "h-1")
+    a = convert_t( "s-1", "h-1" )
     ra = 82.231 ! some rate in s-1
     rb = ra * 60.0d0 * 60.0d0 ! same rate in h-1
     call assert( 634461386, almost_equal( a%to_non_standard( ra ), rb ) )
     call assert( 129254981, almost_equal( a%to_standard( rb ), ra ) )
     call assert( 827490086, a%standard_units( ) .eq. 's-1' )
 
-    a = convert_t( "s-1", "1/hour")
+    a = convert_t( "s-1", "1/hour" )
     ra = 9387582.213 ! some rate in s-1
     rb = ra * 60.0d0 * 60.0d0 ! same rate in h-1
     call assert( 806523824, almost_equal( a%to_non_standard( ra ), rb ) )
     call assert( 918842169, almost_equal( a%to_standard( rb ), ra ) )
     call assert( 657333182, a%standard_units( ) .eq. 's-1' )
 
+    a = convert_t( "m", "m" )
+    ra = 123.543 ! some length in m
+    rb = ra ! same length in m
+    call assert( 175693969, almost_equal( a%to_non_standard( ra ), rb ) )
+    call assert( 852962812, almost_equal( a%to_standard( rb ), ra ) )
+    call assert( 847698505, a%standard_units( ) .eq. 'm' )
+
+    a = convert_t( "m", "dm" )
+    ra = 123.543 ! some length in m
+    rb = ra * 10.0 ! same length in dm
+    call assert( 167070889, almost_equal( a%to_non_standard( ra ), rb ) )
+    call assert( 344397634, almost_equal( a%to_standard( rb ), ra ) )
+    call assert( 174240730, a%standard_units( ) .eq. 'm' )
+
+    a = convert_t( "m", "cm" )
+    ra = 123.543 ! some length in m
+    rb = ra * 100.0 ! same length in cm
+    call assert( 451451672, almost_equal( a%to_non_standard( ra ), rb ) )
+    call assert( 281294768, almost_equal( a%to_standard( rb ), ra ) )
+    call assert( 111137864, a%standard_units( ) .eq. 'm' )
+
+    a = convert_t( "m", "mm" )
+    ra = 123.543 ! some length in m
+    rb = ra * 1000.0 ! same length in mm
+    call assert( 953299304, almost_equal( a%to_non_standard( ra ), rb ) )
+    call assert( 500667151, almost_equal( a%to_standard( rb ), ra ) )
+    call assert( 395518647, a%standard_units( ) .eq. 'm' )
+
+    a = convert_t( "m", "um" )
+    ra = 123.543 ! some length in m
+    rb = ra * 1.0e6 ! same length in um
+    call assert( 337680088, almost_equal( a%to_non_standard( ra ), rb ) )
+    call assert( 785047934, almost_equal( a%to_standard( rb ), ra ) )
+    call assert( 332415781, a%standard_units( ) .eq. 'm' )
+
+    a = convert_t( "m", "nm" )
+    ra = 123.543 ! some length in m
+    rb = ra * 1.0e9 ! same length in nm
+    call assert( 609626723, almost_equal( a%to_non_standard( ra ), rb ) )
+    call assert( 439469819, almost_equal( a%to_standard( rb ), ra ) )
+    call assert( 334321315, a%standard_units( ) .eq. 'm' )
+
+    a = convert_t( "unitless", "unitless" )
+    ra = 123.543 ! some unitless value
+    call assert( 894007506, almost_equal( a%to_non_standard( ra ), ra ) )
+    call assert( 441375353, almost_equal( a%to_standard( ra ), ra ) )
+    call assert( 606267950, a%standard_units( ) .eq. 'unitless' )
+
+    a = convert_t( "unitless", "none" )
+    ra = 123.543 ! some unitless value
+    call assert( 830904640, almost_equal( a%to_non_standard( ra ), ra ) )
+    call assert( 443280887, almost_equal( a%to_standard( ra ), ra ) )
+    call assert( 890648733, a%standard_units( ) .eq. 'unitless' )
+
+    a = convert_t( "unitless", "" )
+    ra = 123.543 ! some unitless value
+    call assert( 267859676, almost_equal( a%to_non_standard( ra ), ra ) )
+    call assert( 945128519, almost_equal( a%to_standard( ra ), ra ) )
+    call assert( 774971615, a%standard_units( ) .eq. 'unitless' )
 
   end subroutine test_convert_t
 
@@ -553,17 +612,17 @@ contains
 use musica_constants,                only : dk => musica_dk
 use musica_convert,                  only : convert_t
 use musica_string,                   only : string_t
- 
+
 type(convert_t) :: convert
 type(string_t) :: str
 real(kind=dk) :: a, long
- 
+
 convert = convert_t( "Pa", "atm" )     ! convert between [Pa] and [atm]
 a = convert%to_standard( 0.915_dk )
 write(*,*) 0.915, " atm is ", a, " Pa"
 a = convert%to_non_standard( 103657.0_dk )
 write(*,*) 103657.0, " Pa is ", a, " atm"
- 
+
 str = "Local solar time"
 convert = convert_t( "UTC", str )      ! converts between [UTC] and [LST]
 long = 2.564_dk                        ! a longitude in radians

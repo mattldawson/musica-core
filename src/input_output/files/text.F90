@@ -28,12 +28,14 @@ module musica_file_text
     private
     !> Flag indicating whether the file is open
     logical :: is_open_ = .false.
+    !> Unlimited dimension name
+    type(string_t) :: unlimited_dimension_name_
     !> Fortran file unit
     integer(kind=musica_ik) :: file_unit_ = -1
     !> Delimiter used in file
     type(string_t) :: delimiter_
-    !> Indicator of whether the time axis is along rows or columns
-    integer(kind=musica_ik) :: time_axis_ = kRows
+    !> Indicator of whether the unlimited dimension axis is along rows or columns
+    integer(kind=musica_ik) :: unlimited_axis_ = kRows
     !> File variable names
     type(string_t), allocatable :: variable_names_(:)
     !> Number of entries in the file
@@ -43,7 +45,7 @@ module musica_file_text
     !> Data staged for output
     real(kind=musica_dk), allocatable :: staged_data_(:)
     !> Time associated with staged data [s]
-    real(kind=musica_dk) :: staged_data_time__s_ = -huge( 1.0_musica_dk )
+    real(kind=musica_dk) :: staged_data_unlimited_value_ = -huge( 1.0_musica_dk )
   contains
     !> Returns the type of file as a string
     procedure :: type => file_type
@@ -51,21 +53,25 @@ module musica_file_text
     procedure :: number_of_dimensions
     !> Returns the number of variables in the file
     procedure :: number_of_variables
+    !> Returns a flag indicating whether a variable exists in the file
+    procedure :: is_file_variable
     !> Opens the file if it is not currently open
     procedure :: check_open
     !> Finds the row or column index of a variable in the file
     procedure :: get_variable_id
     !> Finds the index for a dimension in the file
     procedure :: get_dimension_id
+    !> Returns the size of a dimension
+    procedure :: get_dimension_size
     !> Finds a variable name by its row or column index
     procedure :: get_variable_name
+    !> Get the dimensions of a variable
+    procedure :: get_variable_dimensions
     !> Adds a variable to the set of variable names (output only)
     procedure :: add_variable
-    !> Returns the number of entries in the files
-    procedure :: number_of_entries
     !> Gets a subset of the data for one variable
     procedure :: get_data
-    !> Outputs data for one variable at one time step
+    !> Outputs data for one variable at a specified unlimited dimension value
     procedure :: output
     !> Closes the file
     procedure :: close
@@ -109,7 +115,7 @@ contains
     type(config_t), intent(inout) :: config
 
     character(len=*), parameter :: my_name = "Text file constructor"
-    type(string_t) :: file_name, time_axis
+    type(string_t) :: file_name, unlimited_axis
     logical :: found
 
     allocate( file_text_t :: new_obj )
@@ -126,15 +132,17 @@ contains
 
     ! file structure options
     call config%get( "delimiter", new_obj%delimiter_, my_name, default = "," )
-    call config%get( "time axis", time_axis, my_name, default = "rows" )
-    if( time_axis .eq. "rows" ) then
-      new_obj%time_axis_ = kRows
-    else if( time_axis .eq. "columns" ) then
-      new_obj%time_axis_ = kColumns
+    call config%get( "unlimited dimension", new_obj%unlimited_dimension_name_,&
+                     my_name, default = "time" )
+    call config%get( "time axis", unlimited_axis, my_name, default = "rows" )
+    if( unlimited_axis .eq. "rows" ) then
+      new_obj%unlimited_axis_ = kRows
+    else if( unlimited_axis .eq. "columns" ) then
+      new_obj%unlimited_axis_ = kColumns
     else
       file_name = new_obj%name( )
       call die_msg( 396740549, "Invalid time axis specified for text file '"//&
-                    file_name%to_char( )//"': "//time_axis%to_char( ) )
+                    file_name%to_char( )//"': "//unlimited_axis%to_char( ) )
     end if
 
     call new_obj%initialize_variable_names( )
@@ -182,6 +190,28 @@ contains
     number_of_variables = size( this%variable_names_ )
 
   end function number_of_variables
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Returns a flag indicating whether a variable exists in the file
+  logical function is_file_variable( this, variable_name )
+
+    !> Text file
+    class(file_text_t), intent(inout) :: this
+    !> Variable name to look for
+    character(len=*), intent(in) :: variable_name
+
+    integer(kind=musica_ik) :: i_var
+
+    is_file_variable = .false.
+    do i_var = 1, size( this%variable_names_ )
+      if( this%variable_names_( i_var ) .eq. variable_name ) then
+        is_file_variable = .true.
+        return
+      end if
+    end do
+
+  end function is_file_variable
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -251,7 +281,7 @@ contains
   !> Finds an index for a dimension in the text file
   !!
   !! Dimension indices are not rows/columns and currently there is only
-  !! one dimension (time) with index 1
+  !! one dimension (unlimited) with index 1
   !!
   function get_dimension_id( this, dimension_name ) result( id )
 
@@ -265,6 +295,42 @@ contains
     id = 1
 
   end function get_dimension_id
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Returns the size of a dimension
+  integer(kind=musica_ik) function get_dimension_size( this, dimension_id )
+
+    use musica_assert,                 only : assert, die
+
+    !> Text file
+    class(file_text_t), intent(inout) :: this
+    !> Dimension index
+    integer(kind=musica_ik), intent(in) :: dimension_id
+
+    type(string_t) :: temp_str
+    type(string_t), allocatable :: vars(:)
+
+    call assert( 450649812, dimension_id .eq. 1 )
+    if( this%number_of_entries_ .ge. 0 ) then
+      get_dimension_size = this%number_of_entries_
+      return
+    end if
+    if( this%unlimited_axis_ .eq. kRows ) then
+      this%number_of_entries_ = this%count_lines( ) - 1
+    else if( this%unlimited_axis_ .eq. kColumns ) then
+      call this%check_open( )
+      call this%rewind( )
+      temp_str = this%read_line( )
+      vars = temp_str%split( this%delimiter_ )
+      this%number_of_entries_ = size( vars ) - 1
+      call this%rewind( )
+    else
+      call die( 738970281 )
+    end if
+    get_dimension_size = this%number_of_entries_
+
+  end function get_dimension_size
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -291,6 +357,33 @@ contains
     name = this%variable_names_( id )
 
   end function get_variable_name
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Returns the dimensions of a variable
+  !!
+  function get_variable_dimensions( this, variable_id ) result( dimensions )
+
+    use musica_assert,                 only : assert_msg, die
+    use musica_file_dimension_range,   only : file_dimension_range_t
+
+    !> Variable dimensions
+    type(file_dimension_range_t), allocatable :: dimensions(:)
+    !> Text file
+    class(file_text_t), intent(inout) :: this
+    !> Variable id
+    integer(kind=musica_ik), intent(in) :: variable_id
+
+    type(string_t) :: temp_str
+    type(string_t), allocatable :: vars(:)
+
+    ! text files are currently limited to one (unlimited) dimension
+    allocate( dimensions( 1 ) )
+    dimensions( 1 ) = file_dimension_range_t( 1, 1,                           &
+                                              this%get_dimension_size( 1 ),   &
+                                              is_unlimited = .true. )
+
+  end function get_variable_dimensions
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -333,82 +426,49 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Returns the number of entries in the file
-  !!
-  !! Each entry is assumed to correspond to a time or date-time
-  !!
-  function number_of_entries( this )
-
-    use musica_assert,                 only : assert_msg, die
-
-    !> Number of entries in the file
-    integer(kind=musica_ik) :: number_of_entries
-    !> Text file
-    class(file_text_t), intent(inout) :: this
-
-    type(string_t) :: temp_str
-    type(string_t), allocatable :: vars(:)
-
-    call assert_msg( 710220160, .not. this%is_output( ),                      &
-                     "Number of entries is not available for output files." )
-    if( this%number_of_entries_ .ge. 0 ) then
-      number_of_entries = this%number_of_entries_
-      return
-    end if
-    if( this%time_axis_ .eq. kRows ) then
-      number_of_entries = this%count_lines( ) - 1
-    else if( this%time_axis_ .eq. kColumns ) then
-      call this%check_open( )
-      call this%rewind( )
-      temp_str = this%read_line( )
-      vars = temp_str%split( this%delimiter_ )
-      number_of_entries = size( vars ) - 1
-      call this%rewind( )
-    else
-      call die( 738970281 )
-    end if
-    this%number_of_entries_ = number_of_entries
-
-  end function number_of_entries
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
   !> Returns a subset of the data for one variable
-  subroutine get_data( this, variable_id, start, count, values )
+  subroutine get_data( this, variable_id, range, values )
 
-    use musica_assert,                 only : assert, die
+    use musica_assert,                 only : assert, assert_msg, die
+    use musica_file_dimension_range,   only : file_dimension_range_t
 
     !> Text file
     class(file_text_t), intent(inout) :: this
     !> Row or column index for the variable (starting at 1)
     integer(kind=musica_ik), intent(in) :: variable_id
-    !> Starting index in the temporal dimension to return values for
-    !! (starting from 1)
-    integer(kind=musica_ik), intent(in) :: start
-    !> Number of entries to return
-    integer(kind=musica_ik), intent(in) :: count
+    !> Range of data to return
+    !!
+    !! Only one range in the array is permitted to have size > 1, so that
+    !! results are always returned as a rank 1 array
+    !!
+    class(file_dimension_range_t), intent(in) :: range(:)
     !> Values to return
-    real(kind=musica_dk), intent(out) :: values(count)
+    real(kind=musica_dk), intent(out) :: values(:)
 
     type(string_t) :: temp_str
     type(string_t), allocatable :: str_values(:)
-    integer(kind=musica_ik) :: i_val
+    integer(kind=musica_ik) :: i_val, start, end
 
     call assert( 812525828, this%is_input( ) )
+    call assert_msg( 304104290, size( range ) .eq. 1,                         &
+                     "Text files currently only allow one (unlimited) "//     &
+                     "dimension." )
+    start = range( 1 )%lower_bound( )
+    end   = range( 1 )%upper_bound( )
     call assert( 959156473, start .gt. 0 .and.                                &
-                            start + count - 1 .le. this%number_of_entries_ )
-    if( this%time_axis_ .eq. kRows ) then
+                            end .le. this%number_of_entries_ )
+    if( this%unlimited_axis_ .eq. kRows ) then
       call this%move_to_line( start )
-      do while( this%current_line_ .lt. start + count )
+      do while( this%current_line_ .le. end )
         temp_str = this%read_line( )
         str_values = temp_str%split( this%delimiter_ )
         values( this%current_line_ - start ) = str_values( variable_id )
       end do
-    else if( this%time_axis_ .eq. kColumns ) then
+    else if( this%unlimited_axis_ .eq. kColumns ) then
       call this%move_to_line( variable_id - 1 )
       temp_str = this%read_line( )
       str_values = temp_str%split( this%delimiter_ )
-      do i_val = start, start + count - 1
+      do i_val = start, end
         values( i_val ) = str_values( i_val + 1 )
       end do
     else
@@ -419,27 +479,38 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Outputs data for one variable at one timestep
-  subroutine output( this, variable_id, time__s, output_value )
+  !> Outputs data for one variable at a given unlimited dimension value
+  subroutine output( this, variable_id, unlimited_dimension_value, indices,   &
+      output_value )
+
+    use musica_assert,                 only : assert_msg
+    use musica_file_dimension_range,   only : file_dimension_range_t
 
     !> Text file
     class(file_text_t), intent(inout) :: this
     !> Variable column id
     integer(kind=musica_ik), intent(in) :: variable_id
-    !> Simulation time [s]
-    real(kind=musica_dk), intent(in) :: time__s
+    !> Unlimited dimension value
+    real(kind=musica_dk), intent(in) :: unlimited_dimension_value
+    !> Indices of data point to output in all non-unlimited dimensions
+    class(file_dimension_range_t), intent(in) :: indices(:)
     !> Value to output
     real(kind=musica_dk), intent(in) :: output_value
 
+    call assert_msg( 217942308, size( indices ) .eq. 0,                       &
+                     "Text files currently only allow one (unlimted) "//      &
+                     "dimension." )
     if( .not. allocated( this%staged_data_ ) ) then
       allocate( this%staged_data_( size( this%variable_names_ ) ) )
       this%staged_data_(:) = -huge( 1.0_musica_dk )
-      this%staged_data_time__s_ = time__s
+      this%staged_data_unlimited_value_ = unlimited_dimension_value
     end if
 
     if( this%current_line_ .lt. 1 ) call this%output_header( )
-    if( time__s .ne. this%staged_data_time__s_ ) call this%flush_output( )
-    this%staged_data_time__s_ = time__s
+    if( unlimited_dimension_value .ne. this%staged_data_unlimited_value_ ) then
+      call this%flush_output( )
+    end if
+    this%staged_data_unlimited_value_ = unlimited_dimension_value
     this%staged_data_( variable_id ) = output_value
 
   end subroutine output
@@ -494,10 +565,10 @@ contains
     end if
 
     call this%check_open( )
-    if( this%time_axis_ .eq. kRows ) then
+    if( this%unlimited_axis_ .eq. kRows ) then
       temp_str = this%read_line( )
       this%variable_names_ = temp_str%split( this%delimiter_ )
-    else if( this%time_axis_ .eq. kColumns ) then
+    else if( this%unlimited_axis_ .eq. kColumns ) then
       n_var = this%count_lines( )
       allocate( this%variable_names_( n_var ) )
       do i_var = 1, n_var
@@ -612,7 +683,8 @@ contains
 
     integer(kind=musica_ik) :: i_var
 
-    write(this%file_unit_,'(A)',advance="no") "time"
+    write(this%file_unit_,'(A)',advance="no")                                 &
+        this%unlimited_dimension_name_%to_char( )
     do i_var = 1, size( this%variable_names_ )
       write(this%file_unit_,'(", ",A)',advance="no")                          &
           this%variable_names_( i_var )%to_char( )
@@ -632,14 +704,15 @@ contains
 
     integer(kind=musica_ik) :: i_var
 
-    write(this%file_unit_,'(D30.20)',advance="no") this%staged_data_time__s_
+    write(this%file_unit_,'(D30.20)',advance="no")                            &
+        this%staged_data_unlimited_value_
     do i_var = 1, size( this%staged_data_ )
       write(this%file_unit_,'(", ",D30.20)',advance="no")                     &
           this%staged_data_( i_var )
     end do
     write(this%file_unit_,*) ""
     this%current_line_        = this%current_line_ + 1
-    this%staged_data_time__s_ = -huge( 1.0_musica_dk )
+    this%staged_data_unlimited_value_ = -huge( 1.0_musica_dk )
     this%staged_data_(:)      = -huge( 1.0_musica_dk )
 
   end subroutine flush_output

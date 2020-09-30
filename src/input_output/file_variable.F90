@@ -15,14 +15,9 @@ module musica_file_variable
   private
 
   public :: file_variable_t, file_variable_ptr, find_variable_by_name,    &
-            find_variable_by_musica_name, private_constructor
+            find_variable_by_musica_name
 
   !> A File variable
-  !!
-  !! Only variables that have been successfully matched to a MUSICA domain
-  !! state variable are allowed. All matching criteria are passed to the
-  !! file_variable_t constructor. If a match is found, a new object is
-  !! returned.
   !!
   !! The file_variable_t handles all conversions, offsetting, scaling,
   !! etc. and can be used to return sub-sets of the file data during the
@@ -34,8 +29,12 @@ module musica_file_variable
     type(string_t) :: name_
     !> Expected MUSICA name
     type(string_t) :: musica_name_
+    !> Dimension names
+    type(string_t), allocatable :: dimension_names_(:)
     !> Units for variable in file data
     type(string_t) :: units_
+    !> MUSICA units for the variable
+    type(string_t) :: musica_units_
     !> Converter to MUSICA units
     type(convert_t) :: converter_
     !> Scaling factor
@@ -49,16 +48,20 @@ module musica_file_variable
     procedure :: name => variable_name
     !> Returns the MUSICA name for the variable
     procedure :: musica_name
+    !> Returns the name of one of the variable dimensions
+    procedure :: dimension_name
     !> Returns the units used in the file for the variable
     procedure :: units
+    !> Sets the MUSICA units for the variable
+    procedure :: set_musica_units
     !> Scale, offset, convert units, and shift a set of data to musica values
     !! (Should only be called by extending types)
     procedure :: convert_to_musica_values
     !> Scale, offset, convert units, and shift a set of data to file values
     !! (Should only be called by extending types)
     procedure :: convert_to_file_values
-    !> Gets the number of entries for the variable in the temporal dimension
-    procedure(time_dimension_size), deferred :: time_dimension_size
+    !> Gets the variable dimensions
+    procedure(get_dimensions), deferred :: get_dimensions
     !> Gets a sub-set of the variable data for a specified index range
     !!
     !! Data are returned after applying conversions set up during
@@ -69,14 +72,15 @@ module musica_file_variable
     procedure(output), deferred :: output
     !> Prints the properties of the variable
     procedure :: print => do_print
-    !> Sets the NetCDF <-> MUSICA matching criteria
-    procedure, private :: set_matching_criteria
-    !> Does standard NetCDF -> MUSICA name conversions
+    !> Loads matching and conversion options specified in the configuration data
+    procedure, private :: load_configured_options
+    !> Does standard file -> MUSICA name conversions
     procedure, private :: do_standard_name_conversions
-    !> Attempts to match to a MUSICA domain state variable
-    procedure, private :: do_match
-    !> Sets any specified data adjustments
-    procedure, private :: set_adjustments
+    !> Sets a shift in input/output data
+    procedure, private :: set_shift
+    !> Private constructor
+    !! (Should only be called by constructors of extending types)
+    procedure :: private_constructor
   end type file_variable_t
 
   !> Pointer to file_variable_t objects
@@ -88,13 +92,15 @@ interface
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Gets the number of entries of the variable in the temporal dimension
-  integer(kind=musica_ik) function time_dimension_size( this )
-    use musica_constants,              only : musica_ik
+  !> Gets the variable dimensions
+  function get_dimensions( this ) result( dimensions )
+    use musica_file_dimension_range,   only : file_dimension_range_t
     import file_variable_t
+    !> File dimensions
+    type(file_dimension_range_t), allocatable :: dimensions(:)
     !> File variable
     class(file_variable_t), intent(in) :: this
-  end function time_dimension_size
+  end function get_dimensions
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -106,39 +112,46 @@ interface
   !! - conversion to MUSICA units
   !! - shifting
   !!
-  subroutine get_data( this, file, start, count, values )
+  subroutine get_data( this, file, range, values )
     use musica_constants,              only : musica_ik, musica_dk
     use musica_file,                   only : file_t
+    use musica_file_dimension_range,   only : file_dimension_range_t
     import file_variable_t
     !> File variable
     class(file_variable_t), intent(in) :: this
     !> Input/Output file
     class(file_t), intent(inout) :: file
-    !> Starting index for returned data
-    integer(kind=musica_ik), intent(in) :: start
-    !> Number of data points to return
-    integer(kind=musica_ik), intent(in) :: count
+    !> Range of data to return
+    !!
+    !! Only one range in the array is permitted to have size > 1, so that
+    !! results are always returned as a rank 1 array
+    !!
+    class(file_dimension_range_t), intent(in) :: range(:)
     !> Values to return
-    real(kind=musica_dk), intent(out) :: values(count)
+    real(kind=musica_dk), target, intent(out) :: values(:)
   end subroutine get_data
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   !> Outputs data to the file for a given timestep
   !!
-  !! The state_value will be converted according to the variable configuration
-  !! prior to outputting it to the file.
+  !! The state value will be converted according to the variable
+  !! configuration prior to outputting it to the file.
   !!
-  subroutine output( this, file, time__s, state_value )
+  subroutine output( this, file, unlimited_dimension_value, indices,          &
+      state_value )
     use musica_constants,              only : musica_dk
     use musica_file,                   only : file_t
+    use musica_file_dimension_range,   only : file_dimension_range_t
     import file_variable_t
     !> File variable
     class(file_variable_t), intent(inout) :: this
     !> Output file
     class(file_t), intent(inout) :: file
-    !> Current simulation time [s]
-    real(kind=musica_dk), intent(in) :: time__s
+    !> Unlimited dimension value
+    real(kind=musica_dk), intent(in) :: unlimited_dimension_value
+    !> Indices of data point to output in all non-unlimited dimensions
+    class(file_dimension_range_t), intent(in) :: indices(:)
     !> Value to output
     real(kind=musica_dk), intent(in) :: state_value
   end subroutine output
@@ -175,6 +188,25 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+  !> Returns one of the variable dimension names by dimension index
+  type(string_t) function dimension_name( this, dimension_index )
+
+    use musica_assert,                 only : assert
+
+    !> File variable
+    class(file_variable_t), intent(in) :: this
+    !> Dimension index
+    integer(kind=musica_ik), intent(in) :: dimension_index
+
+    call assert( 477973132,                                                   &
+                 dimension_index .le. size( this%dimension_names_ ) .and.     &
+                 dimension_index .ge. 1 )
+    dimension_name = this%dimension_names_( dimension_index )
+
+  end function dimension_name
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
   !> Returns the units used in the file for the variable
   type(string_t) function units( this )
 
@@ -184,6 +216,36 @@ contains
     units = this%units_
 
   end function units
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Sets the MUSICA units for the variable
+  !!
+  !! Unspecified file variable units are assumed to be in MUSICA units
+  !!
+  subroutine set_musica_units( this, units )
+
+    use musica_assert,                 only : assert_msg
+
+    !> File variable
+    class(file_variable_t), intent(inout) :: this
+    !> MUSICA units
+    character(len=*), intent(in) :: units
+
+    type(string_t) :: l_units
+
+    if( this%musica_units_ .eq. "" ) this%musica_units_ = units
+    l_units = units
+    call assert_msg( 208760654, this%musica_units_%to_lower( ) .eq.           &
+                                l_units%to_lower( ),                          &
+                     "Attempting to change units for variable '"//            &
+                     this%name_%to_char( )//"' from '"//                      &
+                     this%musica_units_%to_char( )//"' to '"//                &
+                     l_units%to_char( )//"'." )
+    if( this%units_ .eq. "" ) this%units_ = this%musica_units_
+    this%converter_ = convert_t( this%musica_units_, this%units_ )
+
+  end subroutine set_musica_units
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -245,20 +307,23 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Sets up matching between MUSICA and File variables
-  subroutine set_matching_criteria( this, config )
+  !> Loads matching and conversion options specified in the configuration data
+  subroutine load_configured_options( this, file, config )
 
     use musica_config,                 only : config_t
+    use musica_file,                   only : file_t
 
     !> File variable
     class(file_variable_t), intent(inout) :: this
+    !> Input/Output File
+    class(file_t), intent(inout) :: file
     !> Configuration describing how to match to MUSICA variables
     !!
     !! If omitted, standard matching is applied
     class(config_t), intent(inout), optional :: config
 
     character(len=*), parameter :: my_name = "File variable matching"
-    type(config_t) :: vars, var_data
+    type(config_t) :: vars, var_data, shift_data
     logical :: found, general_match
 
     ! default to File variable name
@@ -280,10 +345,16 @@ contains
 
     ! update matching criteria as specified in configuration
     if( found ) then
-      call var_data%get( "MusicBox name", this%musica_name_, my_name,       &
+      call var_data%get( "MusicBox name", this%musica_name_, my_name,         &
                          default = this%musica_name_%to_char( ) )
-      call var_data%get( "units", this%units_, my_name,                     &
+      call var_data%get( "units", this%units_, my_name,                       &
                          default = this%units_%to_char( ) )
+      call var_data%get( "shift first entry to", shift_data, my_name,         &
+                         found = found )
+      if( found ) then
+        call this%set_shift( file, shift_data )
+        call shift_data%finalize( )
+      end if
       call var_data%finalize( )
       if( general_match ) then
         this%musica_name_ = this%musica_name_%replace( "*",                   &
@@ -294,11 +365,11 @@ contains
     ! do standard name conversions
     call this%do_standard_name_conversions( )
 
-  end subroutine set_matching_criteria
+  end subroutine load_configured_options
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Does standard name conversions between NetCDF and MUSICA
+  !> Does standard name conversions between file and MUSICA variables
   subroutine do_standard_name_conversions( this )
 
     !> File variable
@@ -325,63 +396,16 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Attempts to find the variable in the MUSICA domain or create the variable
-  !! in the domain for certain input variables.
+  !> Sets a shift in input/output data
   !!
-  logical function do_match( this, domain )
-
-    use musica_domain,                 only : domain_t
-
-    !> File variable
-    class(file_variable_t), intent(inout) :: this
-    !> MUSICA domain
-    class(domain_t), intent(inout) :: domain
-
-    character(len=*), parameter :: my_name = "File variable matcher"
-
-    ! create state variables for emissions and loss rates
-    if( this%musica_name_%substring( 1, 15 ) .eq. "emission_rates%" ) then
-      call domain%register_cell_state_variable( this%musica_name_%to_char( ), & !- state variable name
-                                                "mol m-3 s-1",                & !- MUSICA units
-                                                0.0d0,                        & !- default units
-                                                my_name )
-    else if( this%musica_name_%substring( 1, 20 )                             &
-             .eq. "loss_rate_constants%" ) then
-      call domain%register_cell_state_variable( this%musica_name_%to_char( ), & !- state variable name
-                                                "s-1",                        & !- MUSICA units
-                                                0.0d0,                        & !- default value
-                                                my_name )
-    end if
-
-    ! look for state variables
-    do_match = domain%is_cell_state_variable( this%musica_name_%to_char( ) )
-
-    ! look for standard MUSICA dimensions and set up conversions
-    if( .not. do_match ) then
-      if( this%musica_name_ .eq. "time" ) then
-        do_match = .true.
-        if( this%units_ .eq. "" ) this%units_ = "s"
-        this%converter_ = convert_t( "s", this%units_ )
-      end if
-    else
-      if( this%units_ .eq. "" ) then
-        this%units_ = domain%cell_state_units( this%musica_name_%to_char( ) )
-      end if
-      this%converter_ = convert_t(                                            &
-        domain%cell_state_units( this%musica_name_%to_char( ) ), this%units_ )
-    end if
-
-  end function do_match
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Sets any specified data adjustments
-  subroutine set_adjustments( this, file, config )
+  !! (Currently only time shifts are supported.)
+  subroutine set_shift( this, file, config )
 
     use musica_assert,                 only : assert_msg
     use musica_config,                 only : config_t
     use musica_datetime,               only : datetime_t
     use musica_file,                   only : file_t
+    use musica_file_dimension_range,   only : file_dimension_range_t
 
     !> File variable
     class(file_variable_t), intent(inout) :: this
@@ -390,83 +414,59 @@ contains
     !> Configuration data
     type(config_t), intent(inout) :: config
 
-    character(len=*), parameter :: my_name = "File variable adjustments"
-    type(config_t) :: vars, var_data, shift_data
-    logical :: found
+    character(len=*), parameter :: my_name = "File variable shift"
     real(kind=musica_dk) :: values(1)
     type(datetime_t) :: shift
-    type(string_t) :: units
+    type(file_dimension_range_t), allocatable :: var_dims(:)
 
-    ! get specific property data if present
-    call config%get( "properties", vars, my_name, found = found )
+    ! for now, just handle time shifts
+    call this%set_musica_units( "s" )
+    var_dims = this%get_dimensions( )
+    call assert_msg( 802180458, size( var_dims ) .eq. 1,                      &
+                     "Cannot shift multi-dimensional variable '"//            &
+                     this%name_%to_char( )//"'" )
+    call var_dims(1)%set( 1, 1 )
+    call this%get_data( file, var_dims(1:1), values )
+    shift = datetime_t( config )
+    this%shift_ = shift%in_seconds( ) - values(1)
 
-    ! look for specific and then general variable information
-    if( found ) then
-      call vars%get( this%name_%to_char( ), var_data, my_name, found = found )
-      if( .not. found ) then
-        call vars%get( "*", var_data, my_name, found = found )
-      end if
-      call vars%finalize( )
-    end if
-
-    ! update matching criteria as specified in configuration
-    if( found ) then
-      call var_data%get( "shift first entry to", shift_data, my_name,         &
-                         found = found )
-      if( found ) then
-        units = this%converter_%standard_units( )
-        ! for now, just handle time shifts
-        call assert_msg( 850243996, units .eq. "s",                           &
-                         "Data shifts are not currently supported for "//     &
-                         "units of: "//units%to_char( ) )
-        call this%get_data( file, 1, 1, values )
-        shift = datetime_t( shift_data )
-        this%shift_ = shift%in_seconds( ) - values(1)
-        call shift_data%finalize( )
-      end if
-      call var_data%finalize( )
-    end if
-
-  end subroutine set_adjustments
+  end subroutine set_shift
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   !> Private constructor for common data elements
   !! (Should only be called by constructors of extending types)
-  subroutine private_constructor( this, config, file, domain, name, units )
+  subroutine private_constructor( this, config, file, name, dimension_names,  &
+      units )
 
     use musica_config,                 only : config_t
-    use musica_domain,                 only : domain_t
     use musica_file,                   only : file_t
 
     !> File variable
-    class(file_variable_t), intent(inout), pointer :: this
+    class(file_variable_t), intent(inout) :: this
     !> Variable configuration
     class(config_t), intent(inout) :: config
-    !> Input/Output file
+    !> Input/Output File
     class(file_t), intent(inout) :: file
-    !> Model domain
-    class(domain_t), intent(inout) :: domain
     !> Name used in the file for the variable
     type(string_t), intent(in) :: name
+    !> Dimension names
+    type(string_t), intent(in) :: dimension_names(:)
     !> Units used in the file for the variable
     !! (If not included, standard MUSICA units will be assumed)
     type(string_t), intent(in), optional :: units
 
-    this%name_ = name
+    type(string_t) :: std_units
+
+    this%name_            = name
+    this%dimension_names_ = dimension_names
     if( present( units ) ) then
       this%units_ = units
     else
       this%units_ = ""
     end if
-
-    call this%set_matching_criteria( config )
-    if( .not. this%do_match( domain ) ) then
-      deallocate( this )
-      this => null( )
-      return
-    end if
-    call this%set_adjustments( file, config )
+    this%musica_units_ = ""
+    call this%load_configured_options( file, config )
 
   end subroutine private_constructor
 
@@ -478,10 +478,12 @@ contains
   !!
   function find_variable_by_name( set, name, found ) result( var_id )
 
-    !> Index of variable in set (-1 if not found)
+    use musica_assert,                 only : die
+
+    !> Index of variable in set
     integer(musica_ik) :: var_id
     !> Set of File variables
-    class(file_variable_t), intent(in) :: set(:)
+    class(file_variable_ptr), intent(in) :: set(:)
     !> Variable name to locate
     type(string_t), intent(in) :: name
     !> Flag indicating whether variable was found
@@ -491,12 +493,16 @@ contains
 
     l_name = name%to_lower( )
     do var_id = 1, size( set )
-      if( set( var_id )%name_%to_lower( ) .eq. l_name ) then
+      if( set( var_id )%val_%name_%to_lower( ) .eq. l_name ) then
         if( present( found ) ) found = .true.
         return
       end if
     end do
-    if( present( found ) ) found = .false.
+    if( present( found ) ) then
+      found = .false.
+    else
+      call die( 249940482 )
+    end if
 
   end function find_variable_by_name
 
@@ -508,10 +514,12 @@ contains
   !!
   function find_variable_by_musica_name( set, name, found ) result( var_id )
 
-    !> Index of variable in set (-1 if not found)
+    use musica_assert,                 only : die
+
+    !> Index of variable in set
     integer(musica_ik) :: var_id
     !> Set of File variables
-    class(file_variable_t), intent(in) :: set(:)
+    class(file_variable_ptr), intent(in) :: set(:)
     !> Domain variable name to locate
     type(string_t), intent(in) :: name
     !> Flag indicating whether variable was found
@@ -521,12 +529,16 @@ contains
 
     l_name = name%to_lower( )
     do var_id = 1, size( set )
-      if( set( var_id )%musica_name_%to_lower( ) .eq. l_name ) then
+      if( set( var_id )%val_%musica_name_%to_lower( ) .eq. l_name ) then
         if( present( found ) ) found = .true.
         return
       end if
     end do
-    if( present( found ) ) found = .false.
+    if( present( found ) ) then
+      found = .false.
+    else
+      call die( 464048558 )
+    end if
 
   end function find_variable_by_musica_name
 

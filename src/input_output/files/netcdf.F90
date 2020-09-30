@@ -31,6 +31,8 @@ module musica_file_netcdf
     procedure :: number_of_dimensions
     !> Returns the number of variables in the file
     procedure :: number_of_variables
+    !> Returns a flag indicating whether a variable exists in the file
+    procedure :: is_file_variable
     !> Opens the file if it is not currently open
     procedure :: check_open
     !> Checks a returned NetCDF status code and fail if an error occurred
@@ -152,6 +154,29 @@ contains
                        //file_name%to_char( )//"'" )
 
   end function number_of_variables
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Returns a flag indicating whether a variable exists in the file
+  logical function is_file_variable( this, variable_name )
+
+    use netcdf,                        only : nf90_inq_varid, NF90_NOERR
+
+    !> NetCDF file
+    class(file_netcdf_t), intent(inout) :: this
+    !> Variable to look for
+    character(len=*), intent(in) :: variable_name
+
+    integer(kind=musica_ik) :: status, var_id
+
+    call this%check_open( )
+    is_file_variable = .false.
+    status = nf90_inq_varid( this%id_, variable_name, var_id )
+    if( status .eq. NF90_NOERR ) then
+      is_file_variable = .true.
+    end if
+
+  end function is_file_variable
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 

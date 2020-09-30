@@ -8,6 +8,7 @@
 module musica_file_variable_text
 
   use musica_constants,                only : musica_dk, musica_ik
+  use musica_file_dimension_range,     only : file_dimension_range_t
   use musica_file_variable,            only : file_variable_t
 
   implicit none
@@ -24,13 +25,13 @@ module musica_file_variable_text
     private
     !> Row or column the variable is located in (starting at 1)
     integer(kind=musica_ik) :: id_ = -1
-    !> Number of entries for the variable in the temporal dimension
-    integer(kind=musica_ik) :: time_dimension_size_ = 0
+    !> Variable dimensions
+    type(file_dimension_range_t), allocatable :: dimensions_(:)
   contains
     !> Returns the row or column the variable is located in (starting at 1)
     procedure :: id
-    !> Gets the number of entries for the variable in the temporal dimenion
-    procedure :: time_dimension_size
+    !> Gets the variable dimensions
+    procedure :: get_dimensions
     !> Gets a sub-set of the variable data for a specified index range
     !!
     !! Data are returned after applying conversions set up during
@@ -53,22 +54,16 @@ contains
   !> Creates a file_variable_text_t object for an existing text file variable
   !! by name for input files, or a new file variable for output files.
   !!
-  !! If no matching state variable is found in the MUSICA domain, a null
-  !! pointer is returned.
-  !!
-  function constructor_name( domain, file, variable_name, config )            &
+  function constructor_name( file, variable_name, config, found )             &
       result( new_obj )
 
     use musica_assert,                 only : die
     use musica_config,                 only : config_t
-    use musica_domain,                 only : domain_t
     use musica_file,                   only : file_t
     use musica_file_text,              only : file_text_t
 
     !> New text file variable
     class(file_variable_t), pointer :: new_obj
-    !> MUSICA domain
-    class(domain_t), intent(inout) :: domain
     !> Text file
     class(file_t), intent(inout) :: file
     !> Variable name
@@ -77,10 +72,20 @@ contains
     !!
     !! If omitted, standard matching is applied
     class(config_t), intent(inout), optional :: config
+    !> Optional flag that indicates whether the variable was found in the file
+    logical, intent(out), optional :: found
 
     integer(kind=musica_ik) :: variable_id
 
     call file%check_open( )
+    if( present( found ) ) then
+      if( file%is_file_variable( variable_name ) ) then
+        found = .true.
+      else
+        found = .false.
+        return
+      end if
+    end if
     select type( file )
     class is( file_text_t )
       if( file%is_input( ) .and. .not. file%is_output( ) ) then
@@ -93,7 +98,7 @@ contains
     class default
       call die( 542896218 )
     end select
-    new_obj => constructor_id( domain, file, variable_id, config )
+    new_obj => constructor_id( file, variable_id, config = config )
 
   end function constructor_name
 
@@ -104,21 +109,16 @@ contains
   !! If no matching state variable is found in the MUSICA domain, a null
   !! pointer is returned.
   !!
-  function constructor_id( domain, file, variable_id, config )                &
-      result( new_obj )
+  function constructor_id( file, variable_id, config ) result( new_obj )
 
     use musica_assert,                 only : die
     use musica_config,                 only : config_t
-    use musica_domain,                 only : domain_t
     use musica_file,                   only : file_t
     use musica_file_text,              only : file_text_t
-    use musica_file_variable,          only : private_constructor
     use musica_string,                 only : string_t
 
     !> New text file variable
     class(file_variable_t), pointer :: new_obj
-    !> MUSICA domain
-    class(domain_t), intent(inout) :: domain
     !> Text file
     class(file_t), intent(inout) :: file
     !> Variable row or column position (starting from 1)
@@ -126,7 +126,9 @@ contains
     !> Configuration describing how to match to MUSICA variables
     class(config_t), intent(inout) :: config
 
+    character(len=*), parameter :: my_name = "text file variable constructor"
     type(string_t) :: var_name
+    type(string_t) :: dimension_names(1)
 
     allocate( file_variable_text_t :: new_obj )
     select type( new_obj )
@@ -135,19 +137,18 @@ contains
       class is( file_text_t )
         var_name    = file%get_variable_name( variable_id )
         new_obj%id_ = variable_id
-        if( file%is_input( ) ) then
-          new_obj%time_dimension_size_ = file%number_of_entries( )
-        else
-          new_obj%time_dimension_size_ = 0
-        end if
+        new_obj%dimensions_ = file%get_variable_dimensions( variable_id )
       class default
         call die( 569766402 )
       end select
     class default
       call die( 511927843 )
     end select
+    ! text files only have a single dimension, which defaults to 'time'
+    call config%get( "dimension name", dimension_names(1), my_name,           &
+                     default = "time" )
 
-    call private_constructor( new_obj, config, file, domain, var_name )
+    call new_obj%private_constructor( config, file, var_name, dimension_names )
 
   end function constructor_id
 
@@ -165,15 +166,17 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Returns the number of entries of the variable in the temporal dimension
-  integer(kind=musica_ik) function time_dimension_size( this )
+  !> Gets the variable dimensions
+  function get_dimensions( this ) result( dimensions )
 
+    !> Variable dimensions
+    type(file_dimension_range_t), allocatable :: dimensions(:)
     !> Text file variable
     class(file_variable_text_t), intent(in) :: this
 
-    time_dimension_size = this%time_dimension_size_
+    dimensions = this%dimensions_
 
-  end function time_dimension_size
+  end function get_dimensions
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -181,7 +184,7 @@ contains
   !!
   !! Applies any necessary conversions to the raw input data
   !!
-  subroutine get_data( this, file, start, count, values )
+  subroutine get_data( this, file, range, values )
 
     use musica_assert,                 only : die
     use musica_file,                   only : file_t
@@ -191,16 +194,18 @@ contains
     class(file_variable_text_t), intent(in) :: this
     !> Text file
     class(file_t), intent(inout) :: file
-    !> Starting index for the returned data
-    integer(kind=musica_ik), intent(in) :: start
-    !> Number of data points to return
-    integer(kind=musica_ik), intent(in) :: count
+    !> Range of data to return
+    !!
+    !! Only one range in the array is permitted to have size > 1, so that
+    !! results are always returned as a rank 1 array
+    !!
+    class(file_dimension_range_t), intent(in) :: range(:)
     !> Values to return
-    real(kind=musica_dk), intent(out) :: values(count)
+    real(kind=musica_dk), target, intent(out) :: values(:)
 
     select type( file )
     class is( file_text_t )
-      call file%get_data( this%id_, start, count, values )
+      call file%get_data( this%id_, range, values )
     class default
       call die( 980276126 )
     end select
@@ -215,7 +220,8 @@ contains
   !! The state_value will be converted according to the variable configuration
   !! prior to outputting it to the file.
   !!
-  subroutine output( this, file, time__s, state_value )
+  subroutine output( this, file, unlimited_dimension_value, indices,          &
+      state_value )
 
     use musica_assert,                 only : die
     use musica_file,                   only : file_t
@@ -225,8 +231,10 @@ contains
     class(file_variable_text_t), intent(inout) :: this
     !> Text output file
     class(file_t), intent(inout) :: file
-    !> Current simulation time [s]
-    real(kind=musica_dk), intent(in) :: time__s
+    !> Unlimited dimension value
+    real(kind=musica_dk), intent(in) :: unlimited_dimension_value
+    !> Indices of data point to output in all non-unlimited dimensions
+    class(file_dimension_range_t), intent(in) :: indices(:)
     !> Value to output
     real(kind=musica_dk), intent(in) :: state_value
 
@@ -236,7 +244,8 @@ contains
       class is( file_text_t )
         temp_val(1) = state_value
         call this%convert_to_file_values( temp_val )
-        call file%output( this%id_, time__s, temp_val(1) )
+        call file%output( this%id_, unlimited_dimension_value, indices,       &
+                          temp_val(1) )
       class default
         call die( 786618560 )
     end select

@@ -50,6 +50,8 @@ module musica_file
     procedure(number_of_dimensions), deferred :: number_of_dimensions
     !> Returns the number of variables in the file
     procedure(number_of_variables), deferred :: number_of_variables
+    !> Returns a flag indicating whether a variable exists in the file
+    procedure(is_file_variable), deferred :: is_file_variable
     !> Opens the file if it is not currently open
     procedure(check_open), deferred :: check_open
     !> Closes the file
@@ -107,6 +109,17 @@ interface
     !> Input/Output file
     class(file_t), intent(inout) :: this
   end function number_of_variables
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Returns a flag indicating whether a variable exists in the file
+  logical function is_file_variable( this, variable_name )
+    import file_t
+    !> Input/Output file
+    class(file_t), intent(inout) :: this
+    !> Variable to look for
+    character(len=*), intent(in) :: variable_name
+  end function is_file_variable
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 

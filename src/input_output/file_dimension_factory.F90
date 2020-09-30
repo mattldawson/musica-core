@@ -27,7 +27,7 @@ contains
   !! - "csv", "txt", or "text" (a delimited text file)
   !! - "nc" or "netcdf" (a NetCDF file)
   !!
-  function file_dimension_builder( config, file, variable )                   &
+  function file_dimension_builder( config, file, variable, dimension_name )   &
       result( new_dimension )
 
     use musica_assert,                 only : die_msg
@@ -43,7 +43,10 @@ contains
     !> Input/Output file
     class(file_t), intent(inout) :: file
     !> File variable associated with the dimension
-    class(file_variable_t), intent(in) :: variable
+    class(file_variable_t), intent(in), optional :: variable
+    !> Name of the dimension
+    !! (This should be provided when the dimension has indices but no values)
+    character(len=*), intent(in), optional :: dimension_name
 
     type(string_t) :: file_type
     character(len=*), parameter :: my_name = 'File dimension builder'
@@ -55,10 +58,11 @@ contains
     if( file_type .eq. 'txt' .or.                                             &
         file_type .eq. 'text' .or.                                            &
         file_type .eq. 'csv' ) then
-      new_dimension => file_dimension_text_t( file, variable )
+      new_dimension => file_dimension_text_t( file, variable, dimension_name )
     else if( file_type .eq. 'nc' .or.                                         &
              file_type .eq. 'netcdf' ) then
-      new_dimension => file_dimension_netcdf_t( file, variable )
+      new_dimension => file_dimension_netcdf_t( file, variable,               &
+                                                dimension_name )
     else
       call die_msg( 178041200, "Invalid input/output file type: '"//          &
                                file_type%to_char( )//"'" )

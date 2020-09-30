@@ -218,6 +218,7 @@ contains
     class(domain_iterator_t), pointer :: cell_iter
     class(domain_state_mutator_t), pointer :: mutator
 
+    write(*,*) "setting photo rate constants"
     photo_iter => config%get_iterator( )
     cell_iter  => domain%cell_iterator( )
     do while( photo_iter%next( ) )
@@ -236,6 +237,7 @@ contains
       deallocate( mutator )
     end do
 
+    write(*,*) "done setting photo rate constants"
     ! clean up
     deallocate( photo_iter )
     deallocate( cell_iter  )
