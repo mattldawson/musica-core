@@ -7,14 +7,9 @@ addons:
 services:
 - docker
 before_install:
-- docker build -t music-box-test . --build-arg TAG_ID=chapman
+- docker build -t musica-core-test .
 script:
-- docker run -it music-box-test bash -c 'cd /build; make test'
-deploy:
-  provider: script
-  script: bash docker_push
-  on:
-    branch: master
+- docker run -it musica-core-test bash -c 'cd /build; make test'
 notifications:
   slack:
     rooms:
