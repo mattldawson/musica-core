@@ -70,8 +70,18 @@ module musica_file_variable
     procedure(get_data), deferred :: get_data
     !> Outputs data to the file for a given time step
     procedure(output), deferred :: output
+    !> Returns a flag indicating whether two file_variable_t objects refer to
+    !! the same file variable
+    procedure(is_same_as), deferred :: is_same_as
     !> Prints the properties of the variable
     procedure :: print => do_print
+    !> @name Equality comparison
+    !! @{
+    procedure, private :: equals
+    generic :: operator(==) => equals
+    procedure, private :: not_equals
+    generic :: operator(/=) => not_equals
+    !> @}
     !> Loads matching and conversion options specified in the configuration data
     procedure, private :: load_configured_options
     !> Does standard file -> MUSICA name conversions
@@ -155,6 +165,18 @@ interface
     !> Value to output
     real(kind=musica_dk), intent(in) :: state_value
   end subroutine output
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Returns a flag indicating whether two file_variable_t objects refer to
+  !! the same file variable
+  logical elemental function is_same_as( a, b )
+    import file_variable_t
+    !> File variable a
+    class(file_variable_t), intent(in) :: a
+    !> File variable b
+    class(file_variable_t), intent(in) :: b
+  end function is_same_as
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -304,6 +326,34 @@ contains
     write(*,*) "shift:", this%shift_
 
   end subroutine do_print
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Equality comparison
+  logical elemental function equals( a, b )
+
+    !> File variable a
+    class(file_variable_t), intent(in) :: a
+    !> File variable b
+    class(file_variable_t), intent(in) :: b
+
+    equals = a%is_same_as( b )
+
+  end function equals
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Inequality comparison
+  logical elemental function not_equals( a, b )
+
+    !> File variable a
+    class(file_variable_t), intent(in) :: a
+    !> File variable b
+    class(file_variable_t), intent(in) :: b
+
+    not_equals = .not. a%is_same_as( b )
+
+  end function not_equals
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 

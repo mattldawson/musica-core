@@ -2,7 +2,7 @@
 ! SPDX-License-Identifier: Apache-2.0
 !
 !> \file
-!> The musica_io module
+!> The musica_input_output_processor module
 
 !> The input_output_processor_t type and related functions
 module musica_input_output_processor
@@ -35,8 +35,10 @@ module musica_input_output_processor
     class(file_dimension_t), pointer :: time_ => null( )
     !> Last time index used
     integer(kind=musica_ik) :: last_time_index_ = 1
-    !> Updaters for successfully paired MUSICA <-> I/O variables
-    type(file_updater_ptr), allocatable :: updaters_(:)
+    !> Updaters for paired linear combinations of MUSICA and I/O variables
+    type(file_updater_ptr), allocatable :: linear_combination_updaters_(:)
+    !> Updaters for paired MUSICA <-> I/O variables
+    type(file_updater_ptr), allocatable :: single_variable_updaters_(:)
     !> Iterator over all domain cells
     class(domain_iterator_t), pointer :: iterator_ => null( )
   contains
@@ -52,6 +54,11 @@ module musica_input_output_processor
     procedure :: print => do_print
     !> Loads input file variable names and units
     procedure, private :: load_input_variables
+    !> Load linear combinations of variables
+    procedure, private :: load_linear_combinations
+    !> Returns whether a specified variable is included in the set of linear
+    !! combination updaters
+    procedure, private :: is_used_in_linear_combination
     !> Finalize the input/output processor
     final :: finalize
   end type input_output_processor_t
@@ -102,13 +109,12 @@ contains
     character(len=*), parameter :: my_name = 'I/O processor constructor'
     type(string_t) :: temp_str
     logical :: found, is_input
+    type(config_t) :: linear_combos
 
     allocate( new_obj )
 
     ! set up the file
     new_obj%file_ => file_builder( config )
-
-    allocate( new_obj%updaters_( 0 ) )
 
     ! load the variable names and units from input files
     if( new_obj%file_%is_input( ) ) then
@@ -118,6 +124,9 @@ contains
         call die_msg( 264651720, "Input files require the model domain "//    &
                                  "during initialization for mapping." )
       end if
+    else
+      allocate( new_obj%single_variable_updaters_( 0 ) )
+      allocate( new_obj%linear_combination_updaters_( 0 ) )
     end if
 
   end function constructor
@@ -187,13 +196,15 @@ contains
                      domain_variable_name//"' to register as '"//             &
                      io_var_name%to_char( )//"' in output file '"//           &
                      file_name%to_char( )//"'" )
-    allocate( temp_updaters( size( this%updaters_ ) ) )
-    temp_updaters(:) = this%updaters_(:)
-    deallocate( this%updaters_ )
-    allocate( this%updaters_( size( temp_updaters ) + 1 ) )
-    this%updaters_( 1:size( temp_updaters ) ) = temp_updaters(:)
+    allocate( temp_updaters( size( this%single_variable_updaters_ ) ) )
+    temp_updaters(:) = this%single_variable_updaters_(:)
+    deallocate( this%single_variable_updaters_ )
+    allocate( this%single_variable_updaters_( size( temp_updaters ) + 1 ) )
+    this%single_variable_updaters_( 1:size( temp_updaters ) ) =               &
+        temp_updaters(:)
     deallocate( temp_updaters )
-    this%updaters_( size( this%updaters_ ) )%val_ => updater
+    this%single_variable_updaters_(                                           &
+        size( this%single_variable_updaters_ ) )%val_ => updater
     updater => null( )
     deallocate( new_var )
 
@@ -254,9 +265,18 @@ contains
     if( .not. associated( this%iterator_ ) ) then
       this%iterator_ => domain%cell_iterator( )
     end if
-    do i_updater = 1, size( this%updaters_ )
-      call this%updaters_( i_updater )%val_%update_state( this%file_, i_data, &
-                                                this%iterator_, domain_state )
+    do i_updater = 1, size( this%linear_combination_updaters_ )
+      associate( updater =>                                                   &
+                 this%linear_combination_updaters_( i_updater )%val_ )
+      call updater%update_state( this%file_, i_data, this%iterator_,          &
+                                 domain_state )
+      end associate
+    end do
+    do i_updater = 1, size( this%single_variable_updaters_ )
+      associate( updater => this%single_variable_updaters_( i_updater )%val_ )
+      call updater%update_state( this%file_, i_data, this%iterator_,          &
+                                 domain_state )
+      end associate
     end do
 
   end subroutine update_state
@@ -289,9 +309,11 @@ contains
       this%iterator_ => domain%cell_iterator( )
     end if
 
-    do i_updater = 1, size( this%updaters_ )
-      call this%updaters_( i_updater )%val_%output( this%file_, time__s,      &
-        domain, domain_state, this%iterator_ )
+    do i_updater = 1, size( this%single_variable_updaters_ )
+      associate( updater => this%single_variable_updaters_( i_updater )%val_ )
+      call updater%output( this%file_, time__s, domain, domain_state,         &
+                           this%iterator_ )
+      end associate
     end do
 
   end subroutine output
@@ -315,9 +337,15 @@ contains
     write(*,*) "---------------------"
     write(*,*) " State/Output Updaters"
     write(*,*) "---------------------"
-    if( allocated( this%updaters_ ) ) then
-      do i = 1, size( this%updaters_ )
-        call this%updaters_( i )%val_%print( )
+    write(*,*) ""
+    if( allocated( this%linear_combination_updaters_ ) ) then
+      do i = 1, size( this%linear_combination_updaters_ )
+        call this%linear_combination_updaters_( i )%val_%print( )
+      end do
+    end if
+    if( allocated( this%single_variable_updaters_ ) ) then
+      do i = 1, size( this%single_variable_updaters_ )
+        call this%single_variable_updaters_( i )%val_%print( )
       end do
     end if
     write(*,*) ""
@@ -346,12 +374,24 @@ contains
     !> Input/output configuration
     type(config_t), intent(inout) :: config
 
-    character(len=*), parameter :: my_name = "Load input file variables"
-    logical :: is_match
+    character(len=*), parameter :: my_name = "Input file variable loader"
+    logical :: is_match, found
     type(string_t) :: file_name
     type(file_updater_t), pointer :: updater
-    integer(kind=musica_ik) :: n_dims, n_vars, i_var, n_match, i_match
+    integer(kind=musica_ik) :: n_dims, n_vars, i_var, n_match, i_match,       &
+                               i_updater
     type(file_variable_ptr), allocatable :: vars(:)
+    type(config_t) :: linear_combos
+
+    ! get linear combinations first
+    call config%get( "linear combinations", linear_combos, my_name,           &
+                     found = found )
+    if( found ) then
+      call this%load_linear_combinations( domain, linear_combos )
+      call linear_combos%finalize( )
+    else
+      allocate( this%linear_combination_updaters_( 0 ) )
+    end if
 
     call this%file_%check_open( )
     file_name = this%file_%name( )
@@ -363,17 +403,19 @@ contains
       vars( i_var )%val_ =>                                                   &
           file_variable_builder( config, this%file_, variable_id = i_var )
       updater => file_updater_t( this%file_, domain, vars( i_var )%val_ )
-      if( associated( updater ) ) then
+      if( associated( updater ) .and.                                         &
+          .not. this%is_used_in_linear_combination( vars( i_var )%val_ ) ) then
         deallocate( updater )
         n_match = n_match + 1
-      else
-        if( vars( i_var )%val_%musica_name( ) .eq. "time" ) cycle
-        deallocate( vars( i_var )%val_ )
-        vars( i_var )%val_ => null( )
+        cycle
       end if
+      if( associated( updater ) ) deallocate( updater )
+      if( vars( i_var )%val_%musica_name( ) .eq. "time" ) cycle
+      deallocate( vars( i_var )%val_ )
+      vars( i_var )%val_ => null( )
     end do
-    if( allocated( this%updaters_ ) ) deallocate( this%updaters_ )
-    allocate( this%updaters_( n_match ) )
+    call assert( 177225698, .not. allocated( this%single_variable_updaters_ ) )
+    allocate( this%single_variable_updaters_( n_match ) )
     i_match = 0
     do i_var = 1, n_vars
       if( associated( vars( i_var )%val_ ) ) then
@@ -384,7 +426,7 @@ contains
           cycle
         end if
         i_match = i_match + 1
-        this%updaters_( i_match )%val_ =>                                     &
+        this%single_variable_updaters_( i_match )%val_ =>                     &
             file_updater_t( this%file_, domain, vars( i_var )%val_ )
       end if
     end do
@@ -398,6 +440,89 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+  !> Load linear combinations of variables
+  subroutine load_linear_combinations( this, domain, config )
+
+    use musica_assert,                 only : assert, die_msg
+    use musica_config,                 only : config_t
+    use musica_domain,                 only : domain_t
+    use musica_file_updater,           only : file_updater_t
+    use musica_iterator,               only : iterator_t
+
+    !> Input/Output processor
+    class(input_output_processor_t), intent(inout) :: this
+    !> MUSICA domain
+    class(domain_t), intent(inout) :: domain
+    !> Linear combinations configuration
+    type(config_t), intent(inout) :: config
+
+    character(len=*), parameter :: my_name =                                  &
+        "Input file linear combination loader"
+    class(iterator_t), pointer :: iter
+    type(config_t) :: linear_combo_config
+    integer(kind=musica_ik) :: i_linear_combo, n_linear_combos
+
+    iter => config%get_iterator( )
+    n_linear_combos = 0
+    do while( iter%next( ) )
+      n_linear_combos = n_linear_combos + 1
+    end do
+    call assert( 480140708,                                                   &
+                 .not. allocated( this%linear_combination_updaters_ ) )
+    allocate( this%linear_combination_updaters_( n_linear_combos ) )
+    call iter%reset( )
+    i_linear_combo = 0
+    do while( iter%next( ) )
+      i_linear_combo = i_linear_combo + 1
+      associate( lc_ptr =>                                                    &
+                 this%linear_combination_updaters_( i_linear_combo ) )
+      call config%get( iter, linear_combo_config, my_name )
+      lc_ptr%val_ => file_updater_t( this%file_, domain, linear_combo_config )
+      if( .not. associated( lc_ptr%val_ ) ) then
+        call linear_combo_config%print( )
+        call die_msg( 110789656, "Could not create linear combination." )
+      end if
+      call linear_combo_config%finalize( )
+      end associate
+    end do
+    call assert( 101427158, i_linear_combo .eq. n_linear_combos )
+    deallocate( iter )
+
+  end subroutine load_linear_combinations
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Returns whether a variable is used in the set of linear combination
+  !! updaters
+  logical function is_used_in_linear_combination( this, variable )            &
+      result( is_used )
+
+    use musica_assert,                 only : assert
+    use musica_file_variable,          only : file_variable_t
+
+    !> Input/Output processor
+    class(input_output_processor_t), intent(in) :: this
+    !> File variable
+    class(file_variable_t), intent(in) :: variable
+
+    integer(kind=musica_ik) :: i_updater
+
+    is_used = .false.
+    call assert( 998495082, allocated( this%linear_combination_updaters_ ) )
+    do i_updater = 1, size( this%linear_combination_updaters_ )
+      associate( lc => this%linear_combination_updaters_( i_updater ) )
+      call assert( 428732572, associated( lc%val_ ) )
+      if( lc%val_%includes_variable( variable ) ) then
+        is_used = .true.
+        return
+      end if
+      end associate
+    end do
+
+  end function is_used_in_linear_combination
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
   !> Finalize the input/output processor
   subroutine finalize( this )
 
@@ -408,13 +533,23 @@ contains
 
     if( associated( this%file_ ) ) deallocate( this%file_ )
     if( associated( this%time_ ) ) deallocate( this%time_ )
-    if( allocated( this%updaters_ ) ) then
-      do i_updater = 1, size( this%updaters_ )
-        if( associated( this%updaters_( i_updater )%val_ ) ) then
-          deallocate( this%updaters_( i_updater )%val_ )
+    if( allocated( this%linear_combination_updaters_ ) ) then
+      do i_updater = 1, size( this%linear_combination_updaters_ )
+        if( associated( this%linear_combination_updaters_( i_updater          &
+                                                                )%val_ ) ) then
+          deallocate( this%linear_combination_updaters_( i_updater )%val_ )
         end if
       end do
-      deallocate( this%updaters_ )
+      deallocate( this%linear_combination_updaters_ )
+    end if
+    if( allocated( this%single_variable_updaters_ ) ) then
+      do i_updater = 1, size( this%single_variable_updaters_ )
+        if( associated( this%single_variable_updaters_( i_updater             &
+                                                                )%val_ ) ) then
+          deallocate( this%single_variable_updaters_( i_updater )%val_ )
+        end if
+      end do
+      deallocate( this%single_variable_updaters_ )
     end if
     if( associated( this%iterator_ ) ) deallocate( this%iterator_ )
 

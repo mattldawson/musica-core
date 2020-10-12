@@ -15,6 +15,7 @@ set(MUSICA_SRC config.F90
                input_output/file_dimensions/netcdf.F90
                input_output/file_dimensions/text.F90
                input_output/file_factory.F90
+               input_output/file_paired_variable.F90
                input_output/file_updater.F90
                input_output/file_variable.F90
                input_output/file_variable_factory.F90
