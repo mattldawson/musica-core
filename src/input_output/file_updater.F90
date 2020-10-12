@@ -8,53 +8,45 @@
 module musica_file_updater
 
   use musica_constants,                only : musica_dk, musica_ik
-  use musica_domain,                   only : domain_state_accessor_t,        &
-                                              domain_state_mutator_t
-  use musica_file_variable,            only : file_variable_t
+  use musica_file_paired_variable,     only : file_paired_variable_ptr
 
   implicit none
   private
 
   public :: file_updater_t, file_updater_ptr
 
-  !> Max length of staged data array
-  integer(kind=musica_ik), parameter :: kMaxStagedData = 100
-
-  !> Updater for a paired MUSICA <-> file variable
+  !> Updater for one or more paired MUSICA <-> file variables
   !!
-  !! Staging data and functions for updating MUSICA state variables from input
-  !! data and updating output files from the MUSICA state.
+  !! Functions for updating MUSICA state variables from input data and
+  !! updating output files from the MUSICA state.
   !!
   type :: file_updater_t
     private
-    !> Mutator for the variable
-    class(domain_state_mutator_t), pointer :: mutator_ => null( )
-    !> Accessor for the variable
-    class(domain_state_accessor_t), pointer :: accessor_ => null( )
-    !> Variable information
-    class(file_variable_t), pointer :: variable_ => null( )
-    !> Index of first staged data
-    integer(kind=musica_ik) :: first_staged_index_ = 1
-    !> Number of staged data
-    integer(kind=musica_ik) :: number_staged_ = 0
-    !> Staged data
-    real(kind=musica_dk) :: staged_data_(kMaxStagedData) = -huge(1.0_musica_dk)
+    !> Set of paired variables
+    type(file_paired_variable_ptr), allocatable :: pairs_(:)
+    !> Scaling factor (for linear combinations of variables)
+    real(kind=musica_dk) :: scale_factor_ = 1.0_musica_dk
+    !> Working array for updating MUSICA/file variables
+    real(kind=musica_dk), allocatable :: working_file_values_(:)
+    !> Working array for updating MUSICA/file variables
+    real(kind=musica_dk), allocatable :: working_musica_values_(:)
   contains
+    !> Indicates whether a specified variable is used in the updater
+    procedure :: includes_variable
     !> Updates the state for a given index in the temporal dimension
     procedure :: update_state
     !> Outputs data to the file
     procedure :: output
     !> Prints the properties of the updater
     procedure :: print => do_print
-    !> Updates the staged data
-    procedure, private :: update_staged_data
-    !> Finalize the updater
+    !> Finalize a file_updater_t object
     final :: finalize
   end type file_updater_t
 
   !> Constructor
   interface file_updater_t
-    module procedure :: constructor
+    module procedure :: constructor_single_variable
+    module procedure :: constructor_linear_combination
   end interface file_updater_t
 
   !> Pointer to file_updater_t objects
@@ -66,18 +58,18 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Creates an updater for a matched MUSICA <-> File variable pair
+  !> Creates an updater for a single paired MUSICA/file variable
   !!
-  !! If the file variable cannot be matched to a MUSICA domain variable, a
-  !! null pointer is returned.
+  !! If the MUSICA domain variable cannot be found, a null pointer is
+  !! returned.
   !!
-  function constructor( file, domain, variable ) result( new_obj )
+  function constructor_single_variable( file, domain, variable )              &
+      result( new_obj )
 
-    use musica_assert,                 only : die
     use musica_domain,                 only : domain_t
     use musica_file,                   only : file_t
+    use musica_file_paired_variable,   only : file_paired_variable_t
     use musica_file_variable,          only : file_variable_t
-    use musica_string,                 only : string_t
 
     !> New MUSICA<->File variable match
     type(file_updater_t), pointer :: new_obj
@@ -88,33 +80,119 @@ contains
     !> File variable
     class(file_variable_t), intent(in) :: variable
 
-    character(len=*), parameter :: my_name = "File updater constructor"
-    type(string_t) :: std_units, var_name
+    type(file_paired_variable_t), pointer :: pair
 
+    new_obj => null( )
+    pair => file_paired_variable_t( file, domain, variable, .false. )
+    if( .not. associated( pair ) ) return
     allocate( new_obj )
-    allocate( new_obj%variable_, source = variable )
+    allocate( new_obj%pairs_( 1 ) )
+    allocate( new_obj%working_file_values_( 1 ) )
+    allocate( new_obj%working_musica_values_( 1 ) )
+    new_obj%pairs_( 1 )%val_ => pair
 
-    ! Find or create domain variables
-    if( .not. do_match( domain, new_obj%variable_ ) ) then
-      deallocate( new_obj )
-      new_obj => null( )
-      return
-    end if
+  end function constructor_single_variable
 
-    var_name = new_obj%variable_%musica_name( )
-    std_units = domain%cell_state_units( var_name%to_char( ) )
-    if( file%is_input( ) ) then
-      new_obj%mutator_ => domain%cell_state_mutator( var_name%to_char( ),     & !- state variable name
-                                                     std_units%to_char( ),    & !- MUSICA units
-                                                     my_name )
-    end if
-    if( file%is_output( ) ) then
-      new_obj%accessor_ => domain%cell_state_accessor( var_name%to_char( ),   & !- state variable name
-                                                       std_units%to_char( ),  & !- MUSICA units
-                                                       my_name )
-    end if
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  end function constructor
+  !> Creates an updater for a linear combination of MUSICA/file variables
+  !!
+  !! If any of the specified variables cannot be found in the file or the
+  !! MUSICA domain, a null pointer is returned.
+  !!
+  function constructor_linear_combination( file, domain, config )             &
+      result( new_obj )
+
+    use musica_assert,                 only : assert_msg
+    use musica_config,                 only : config_t
+    use musica_domain,                 only : domain_t
+    use musica_file,                   only : file_t
+    use musica_file_paired_variable,   only : file_paired_variable_t
+    use musica_file_variable,          only : file_variable_t
+    use musica_file_variable_factory,  only : file_variable_builder
+    use musica_iterator,               only : iterator_t
+    use musica_string,                 only : string_t
+
+    !> New updater for MUSICA<->File linear combination of variables
+    type(file_updater_t), pointer :: new_obj
+    !> File to update from
+    class(file_t), intent(inout) :: file
+    !> Model domain
+    class(domain_t), intent(inout) :: domain
+    !> Linear combination configuration
+    class(config_t), intent(inout) :: config
+
+    character(len=*), parameter :: my_name =                                  &
+        "File linear combination updater constructor"
+    type(config_t) :: props, var_config
+    type(string_t) :: var_name
+    class(iterator_t), pointer :: iter
+    class(file_variable_t), pointer :: var
+    type(file_paired_variable_t), pointer :: pair
+    integer(kind=musica_ik) :: i_var, n_vars
+
+    call config%get( "properties", props, my_name )
+    iter => props%get_iterator( )
+    n_vars = 0
+    do while( iter%next( ) )
+      n_vars = n_vars + 1
+    end do
+    allocate( new_obj )
+    allocate( new_obj%pairs_( n_vars ) )
+    allocate( new_obj%working_file_values_( n_vars ) )
+    allocate( new_obj%working_musica_values_( n_vars ) )
+    call config%get( "scale factor", new_obj%scale_factor_, my_name,          &
+                     default = new_obj%scale_factor_ )
+    call iter%reset( )
+    i_var = 0
+    do while( iter%next( ) )
+      i_var = i_var + 1
+      call props%get( iter, var_config, my_name )
+      var_name = props%key( iter )
+      call var_config%add( "type", file%type( ), my_name )
+      var => file_variable_builder( var_config, file, var_name%to_char( ) )
+      call var_config%finalize( )
+      call assert_msg( 659534542, associated( var ), "Could not find "//      &
+                       "MUSICA domain variable '"//var_name%to_char( )//"'" )
+      pair => file_paired_variable_t( file, domain, var, .true. )
+      if( .not. associated( pair ) ) then
+        deallocate( new_obj )
+        new_obj => null( )
+        exit
+      end if
+      new_obj%pairs_( i_var )%val_ => pair
+      deallocate( var )
+    end do
+    call props%finalize( )
+    deallocate( iter )
+
+  end function constructor_linear_combination
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Indicates whether a specified variable is used in the updater
+  logical function includes_variable( this, variable )
+
+    use musica_assert,                 only : assert
+    use musica_file_variable,          only : file_variable_t
+
+    !> File updater
+    class(file_updater_t), intent(in) :: this
+    !> Variable to look for in updater
+    class(file_variable_t), intent(in) :: variable
+
+    integer(kind=musica_ik) :: i_pair
+
+    call assert( 684123688, allocated( this%pairs_ ) )
+    includes_variable = .false.
+    do i_pair = 1, size( this%pairs_ )
+      if( this%pairs_( i_pair )%val_%includes_variable( variable ) ) then
+        includes_variable = .true.
+        return
+      end if
+    end do
+
+  end function includes_variable
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -137,14 +215,47 @@ contains
     !> Domain state to update
     class(domain_state_t), intent(inout) :: state
 
-    if( index .lt. this%first_staged_index_ .or.                             &
-        index .gt. ( this%first_staged_index_ + this%number_staged_ ) - 1 )  &
-      call this%update_staged_data( file, index )
-    call assert( 269276238, associated( this%mutator_ ) )
+    integer(kind=musica_ik) :: i_pair
+    real(kind=musica_dk) :: file_total, musica_total, new_value
+
+    call assert( 381356243, allocated( this%pairs_ ) )
     call iterator%reset( )
+    file_total   = 0.0_musica_dk
+    musica_total = 0.0_musica_dk
     do while( iterator%next( ) )
-      call state%update( iterator, this%mutator_,                             &
-                    this%staged_data_( index - this%first_staged_index_ + 1 ) )
+      if( size( this%pairs_ ) .eq. 1 ) then
+        associate( pair => this%pairs_( 1 )%val_ )
+        call pair%set_musica_value( state, iterator,                          &
+                                    pair%get_file_value( file, index ) )
+        end associate
+        cycle
+      end if
+      do i_pair = 1, size( this%pairs_ )
+        associate( pair => this%pairs_( i_pair )%val_ )
+        this%working_file_values_( i_pair ) =                                 &
+            pair%get_file_value( file, index )
+        this%working_musica_values_( i_pair ) =                               &
+            pair%get_musica_value( state, iterator )
+        file_total   = file_total   + this%working_file_values_( i_pair )
+        musica_total = musica_total + this%working_musica_values_( i_pair )
+        end associate
+      end do
+      if( musica_total .eq. 0.0_musica_dk ) then
+        do i_pair = 1, size( this%pairs_ )
+          associate( pair => this%pairs_( i_pair )%val_ )
+          new_value = this%working_file_values_( i_pair ) * this%scale_factor_
+          call pair%set_musica_value( state, iterator, new_value )
+          end associate
+        end do
+      else
+        do i_pair = 1, size( this%pairs_ )
+          associate( pair => this%pairs_( i_pair )%val_ )
+          new_value = ( this%working_musica_values_( i_pair ) /               &
+                        musica_total * file_total ) * this%scale_factor_
+          call pair%set_musica_value( state, iterator, new_value )
+          end associate
+        end do
+      end if
     end do
 
   end subroutine update_state
@@ -154,7 +265,7 @@ contains
   !> Outputs data to a file
   subroutine output( this, file, time__s, domain, domain_state, iterator )
 
-    use musica_assert,                 only : assert_msg
+    use musica_assert,                 only : assert, assert_msg
     use musica_domain,                 only : domain_t, domain_state_t,       &
                                               domain_iterator_t
     use musica_file,                   only : file_t
@@ -174,12 +285,14 @@ contains
     class(domain_iterator_t), intent(inout) :: iterator
 
     real(kind=musica_dk) :: state_value
-    type(file_dimension_range_t) :: indices(0)
 
+    call assert( 243308233, allocated( this%pairs_ ) )
+    call assert( 632837520, size( this%pairs_ ) .eq. 1 )
     call iterator%reset( )
     if( iterator%next( ) ) then
-      call domain_state%get( iterator, this%accessor_, state_value )
-      call this%variable_%output( file, time__s, indices, state_value )
+      state_value = this%pairs_( 1 )%val_%get_musica_value( domain_state,     &
+                                                            iterator )
+      call this%pairs_( 1 )%val_%set_file_value( file, time__s, state_value )
     end if
     call assert_msg( 608265274, .not. iterator%next( ), "Output files are "// &
                      "not yet set up for multiple cells." )
@@ -194,99 +307,38 @@ contains
     !> File updater
     class(file_updater_t), intent(in) :: this
 
-    call this%variable_%print( )
+    integer(kind=musica_ik) :: i_pair
+
+    write(*,*) "*** Updater for paired MUSICA/file variables ***"
+    if( allocated( this%pairs_ ) ) then
+      do i_pair = 1, size( this%pairs_ )
+        call this%pairs_( i_pair )%val_%print( )
+      end do
+    end if
+    write(*,*) "*** End file updater ***"
 
   end subroutine do_print
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Updates the staged data to start from a given index
-  subroutine update_staged_data( this, file, index )
-
-    use musica_assert,                 only : assert, assert_msg
-    use musica_file,                   only : file_t
-    use musica_file_dimension_range,   only : file_dimension_range_t
-
-    !> File updater
-    class(file_updater_t), intent(inout) :: this
-    !> File file
-    class(file_t), intent(inout) :: file
-    !> New starting index
-    integer(kind=musica_ik), intent(in) :: index
-
-    integer(kind=musica_ik) :: n_times
-    type(file_dimension_range_t), allocatable :: var_dims(:)
-
-    var_dims = this%variable_%get_dimensions( )
-    call assert_msg( 301384964, size( var_dims ) .eq. 1, "File variables "//  &
-                     "are currently restricted to one dimension." )
-    n_times = min( kMaxStagedData, var_dims(1)%upper_bound( ) - index + 1 )
-    call file%check_open( )
-    call assert( 382334001, index .gt. 0 .and. n_times .ge. 1 )
-    this%staged_data_(:) = -huge( 1.0_musica_dk )
-    call var_dims(1)%set( index, index + n_times - 1 )
-    call this%variable_%get_data( file, var_dims(1:1), this%staged_data_ )
-    this%first_staged_index_ = index
-    this%number_staged_      = n_times
-
-  end subroutine update_staged_data
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Finalize the File updater
+  !> Finalize a file_updater_t object
   subroutine finalize( this )
 
     !> File updater
     type(file_updater_t), intent(inout) :: this
 
-    if( associated( this%mutator_  ) ) deallocate( this%mutator_  )
-    if( associated( this%accessor_ ) ) deallocate( this%accessor_ )
-    if( associated( this%variable_ ) ) deallocate( this%variable_ )
+    integer(kind=musica_ik) :: i_pair
+
+    if( allocated( this%pairs_ ) ) then
+      do i_pair = 1, size( this%pairs_ )
+        if( associated( this%pairs_( i_pair )%val_ ) ) then
+          deallocate( this%pairs_( i_pair )%val_ )
+        end if
+      end do
+      deallocate( this%pairs_ )
+    end if
 
   end subroutine finalize
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Attemps to find a domain state variable for a given file variable. For
-  !! certain file variables a domain state variable is created.
-  !!
-  logical function do_match( domain, variable )
-
-    use musica_domain,                 only : domain_t
-    use musica_string,                 only : string_t
-
-    !> MUSICA domain
-    class(domain_t), intent(inout) :: domain
-    !> File variable
-    class(file_variable_t), intent(inout) :: variable
-
-    character(len=*), parameter :: my_name = "File variable matcher"
-    type(string_t) :: musica_name, musica_units
-
-    musica_name = variable%musica_name( )
-
-    ! create state variables for emissions and loss rates
-    if( musica_name%substring( 1, 15 ) .eq. "emission_rates%" ) then
-      call domain%register_cell_state_variable( musica_name%to_char( ),       & !- state variable name
-                                                "mol m-3 s-1",                & !- MUSICA units
-                                                0.0d0,                        & !- default units
-                                                my_name )
-    else if( musica_name%substring( 1, 20 ) .eq. "loss_rate_constants%" ) then
-      call domain%register_cell_state_variable( musica_name%to_char( ),       & !- state variable name
-                                                "s-1",                        & !- MUSICA units
-                                                0.0d0,                        & !- default value
-                                                my_name )
-    end if
-
-    ! look for state variables
-    do_match = domain%is_cell_state_variable( musica_name%to_char( ) )
-
-    if( do_match ) then
-      musica_units = domain%cell_state_units( musica_name%to_char( ) )
-      call variable%set_musica_units( musica_units%to_char( ) )
-    end if
-
-  end function do_match
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 

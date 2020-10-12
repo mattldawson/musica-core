@@ -40,6 +40,9 @@ module musica_file_variable_netcdf
     procedure :: get_data
     !> Outputs data to the file for a given time step
     procedure :: output
+    !> Returns a flag indicating whether two file_variable_t objects refer to
+    !! the same file variable
+    procedure :: is_same_as
     !> Prints the variable properties
     procedure :: print => do_print
   end type file_variable_netcdf_t
@@ -356,6 +359,25 @@ contains
     call die_msg( 835094621, "NetCDF output is not ready yet." )
 
   end subroutine output
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Returns a flag indicating whether two file_variable_t objects refer to
+  !! the same file variable
+  logical elemental function is_same_as( a, b )
+
+    !> File variable a
+    class(file_variable_netcdf_t), intent(in) :: a
+    !> File variable b
+    class(file_variable_t), intent(in) :: b
+
+    is_same_as = .false.
+    select type( b )
+    class is( file_variable_netcdf_t )
+      is_same_as = a%id_ .eq. b%id_
+    end select
+
+  end function is_same_as
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
