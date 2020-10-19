@@ -63,7 +63,7 @@ contains
     !> New domain
     class(domain_t), pointer :: new_domain
     !> Domain configuration data
-    class(config_t), intent(inout) :: config
+    type(config_t), intent(inout) :: config
 
     type(string_t) :: domain_type
     character(len=*), parameter :: my_name = 'domain builder'

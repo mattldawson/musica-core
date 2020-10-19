@@ -104,6 +104,9 @@ contains
     end do
     acc_la2  => domain%cell_flag_accessor( "la", my_name )
 
+    ! lock the domain configuration
+    call domain%lock( )
+
     ! get domain state objects
     state  => domain%new_state( )
     state2 => domain%new_state( )
@@ -278,7 +281,6 @@ contains
     end do
 
     ! clean up memory
-    call config%finalize( )
     deallocate( domain )
     deallocate( state )
     deallocate( state2 )

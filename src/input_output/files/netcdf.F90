@@ -20,8 +20,18 @@ module musica_file_netcdf
     private
     !> Flag indicating whether the file is open
     logical :: is_open_ = .false.
+    !> Flag indicating whether a file is in data mode
+    logical :: is_in_data_mode_ = .false.
     !> NetCDF file id
     integer(kind=musica_ik) :: id_
+    !> NetCDF dimension id for time (output files only)
+    integer(kind=musica_ik) :: time_dimid_
+    !> NetCDF variable id for time (output files only)
+    integer(kind=musica_ik) :: time_varid_
+    !> Last output time value [s]
+    real(kind=musica_dk) :: last_output_time__s_ = -9999e300_musica_dk
+    !> Last output time index
+    integer(kind=musica_ik) :: last_output_time_index_ = 0
   contains
     !> Returns the type of file as a string
     procedure :: type => file_type
@@ -35,10 +45,18 @@ module musica_file_netcdf
     procedure :: is_file_variable
     !> Opens the file if it is not currently open
     procedure :: check_open
+    !> Enters data mode if not currently in data mode
+    procedure :: check_data_mode
+    !> Sets the current simulation time (output files only)
+    procedure :: set_output_time__s
+    !> Returns the current index in the temporal dimension
+    procedure :: current_time_index
     !> Checks a returned NetCDF status code and fail if an error occurred
     procedure :: check_status
     !> Closes the file
     procedure :: close
+    !> Creates a file for output
+    procedure, private :: create_output_file
     !> Finalizes the file
     final :: finalize
   end type file_netcdf_t
@@ -58,7 +76,6 @@ contains
     use musica_assert,                 only : assert_msg
     use musica_config,                 only : config_t
     use musica_file,                   only : private_constructor
-    use musica_string,                 only : string_t
 
     !> New NetCDF file object
     class(file_t), pointer :: new_obj
@@ -68,9 +85,10 @@ contains
     allocate( file_netcdf_t :: new_obj )
 
     call private_constructor( new_obj, config )
-
-    call assert_msg( 467374411, .not. new_obj%is_output( ),                   &
-                     "Output NetCDF files are not yet supported." )
+    call assert_msg( 708084310,                                               &
+                ( new_obj%is_input( ) .and. .not. new_obj%is_output( ) ) .or. &
+                ( .not. new_obj%is_input( ) .and. new_obj%is_output( ) ),     &
+                "NetCDF files must be either input or output." )
 
   end function constructor
 
@@ -96,8 +114,9 @@ contains
     !> NetCDF file id
     integer(kind=musica_ik) :: id
     !> NetCDF file
-    class(file_netcdf_t), intent(in) :: this
+    class(file_netcdf_t), intent(inout) :: this
 
+    call this%check_open( )
     id = this%id_
 
   end function id
@@ -117,7 +136,7 @@ contains
 
     type(string_t) :: file_name
 
-    call this%check_open( )
+    call this%check_data_mode( )
     file_name = this%name( )
     call this%check_status( 639211977,                                        &
                         nf90_inquire( this%id_,                               &
@@ -145,7 +164,7 @@ contains
 
     type(string_t) :: file_name
 
-    call this%check_open( )
+    call this%check_data_mode( )
     file_name = this%name( )
     call this%check_status( 150118878,                                        &
                        nf90_inquire( this%id_,                                &
@@ -183,6 +202,7 @@ contains
   !> Opens the file if it is not open already
   subroutine check_open( this )
 
+    use musica_assert,                 only : die_msg
     use musica_string,                 only : string_t
     use netcdf,                        only : nf90_open, NF90_NOWRITE
 
@@ -193,16 +213,90 @@ contains
 
     if( this%is_open_ ) return
     file_name = this%name( )
-    call this%check_status( 172405314,                                        &
-        nf90_open( file_name%to_char( ), NF90_NOWRITE, this%id_ ),            &
-                   "Error opening NetCDF file" )
+    if( this%is_input( ) .and. .not. this%is_output( ) ) then
+      call this%check_status( 172405314,                                      &
+          nf90_open( file_name%to_char( ), NF90_NOWRITE, this%id_ ),          &
+          "Error opening NetCDF file '"//file_name%to_char( )//"'" )
+      this%is_in_data_mode_ = .true.
+    else if( this%is_output( ) .and. .not. this%is_input( ) ) then
+      call this%create_output_file( )
+    else
+      call die_msg( 154946927, "Mixed input/output NetCDF files are not "//   &
+                    "supported for file '"//file_name%to_char( )//"'" )
+    end if
     this%is_open_ = .true.
 
   end subroutine check_open
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Checks a NetCDF and fail with a message if an error occurred
+  !> Enters data mode if the file is not already in data mode
+  subroutine check_data_mode( this )
+
+    use musica_assert,                 only : assert
+    use musica_string,                 only : string_t
+    use netcdf,                        only : nf90_enddef, NF90_CLOBBER
+
+    !> NetCDF file
+    class(file_netcdf_t), intent(inout) :: this
+
+    type(string_t) :: file_name
+
+    call this%check_open( )
+    if( this%is_in_data_mode_ ) return
+    call assert( 562436195, this%is_output( ) .and. .not. this%is_input( ) )
+    file_name = this%name( )
+    call this%check_status( 567692478, nf90_enddef( this%id_ ),               &
+          "Error ending define mode for NetCDF output file '"//               &
+          file_name%to_char( )//"'" )
+    this%is_in_data_mode_ = .true.
+
+  end subroutine check_data_mode
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Sets the current simulation time [s] (output files only)
+  subroutine set_output_time__s( this, time__s )
+
+    use musica_assert,                 only : assert
+    use netcdf,                        only : nf90_put_var
+
+    !> NetCDF file
+    class(file_netcdf_t), intent(inout) :: this
+    !> Current simulation time [s]
+    real(kind=musica_dk), intent(in) :: time__s
+
+    call this%check_data_mode( )
+    if( this%last_output_time__s_ .eq. time__s ) return
+    call assert( 156844437, time__s .gt. this%last_output_time__s_ )
+    this%last_output_time__s_    = time__s
+    this%last_output_time_index_ = this%last_output_time_index_ + 1
+    call this%check_status( 718436162,                                        &
+        nf90_put_var( this%id_, this%time_varid_, time__s,                    &
+                      start = (/ this%last_output_time_index_ /) ),           &
+        "Error adding time to NetCDF file" )
+
+  end subroutine set_output_time__s
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Returns the current index in the temporal dimension
+  integer(kind=musica_ik) function current_time_index( this )
+
+    use musica_assert,                 only : assert
+
+    !> NetCDF file
+    class(file_netcdf_t), intent(inout) :: this
+
+    call this%check_data_mode( )
+    call assert( 329646293, this%last_output_time_index_ .gt. 0 )
+    current_time_index = this%last_output_time_index_
+
+  end function current_time_index
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Checks a NetCDF status code and fail with a message if an error occurred
   subroutine check_status( this, code, status, error_message )
 
     use musica_assert,                 only : die_msg
@@ -241,14 +335,55 @@ contains
 
     type(string_t) :: file_name
 
-    if( this%is_open_ ) return
+    if( .not. this%is_open_ ) return
     file_name = this%name( )
     call this%check_status( 633660547, nf90_close( this%id_ ),                &
                             "Error closing NetCDF file '"//                   &
                             file_name%to_char( )//"'" )
-    this%is_open_ = .false.
+    this%is_open_                = .false.
+    this%is_in_data_mode_        = .false.
+    this%last_output_time__s_    = -9999e300_musica_dk
+    this%last_output_time_index_ = 0
 
   end subroutine close
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Creates a file for output
+  !!
+  !! \todo To be replaced when column data is included in I/O
+  subroutine create_output_file( this )
+
+    use musica_string,                 only : string_t
+    use netcdf,                        only : nf90_create, nf90_def_dim,      &
+                                              nf90_def_var, nf90_put_att,     &
+                                              NF90_CLOBBER, NF90_DOUBLE,      &
+                                              NF90_UNLIMITED
+
+    !> NetCDF file
+    class(file_netcdf_t), intent(inout) :: this
+
+    type(string_t) :: file_name
+
+    file_name = this%name( )
+    call this%check_status( 407715447,                                        &
+        nf90_create( file_name%to_char( ), NF90_CLOBBER, this%id_ ),          &
+        "Error opening NetCDF file '"//file_name%to_char( )//"'" )
+    call this%check_status( 388625371,                                        &
+        nf90_def_dim( this%id_, "time", NF90_UNLIMITED, this%time_dimid_ ),   &
+        "Error creating time dimension in NetCDF file '"//                    &
+        file_name%to_char( )//"'" )
+    call this%check_status( 764719566,                                        &
+        nf90_def_var( this%id_, "time", NF90_DOUBLE, this%time_dimid_,        &
+                      this%time_varid_ ),                                     &
+        "Error creating time variable in NetCDF file '"//                     &
+        file_name%to_char( )//"'" )
+    call this%check_status( 163555675,                                        &
+        nf90_put_att( this%id_, this%time_varid_, "units", "s" ),             &
+        "Error adding units attribute for time in NetCDF file '"//            &
+        file_name%to_char( )//"'" )
+
+  end subroutine create_output_file
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 

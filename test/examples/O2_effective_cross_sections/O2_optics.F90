@@ -62,7 +62,7 @@ contains
     !> New O2_optics_t object
     type(O2_optics_t), pointer :: new_obj
     !> O2 optics configration data
-    class(config_t), intent(inout) :: config
+    type(config_t), intent(inout) :: config
 
     allocate( new_obj )
     call new_obj%private_constructor( config, "m" )

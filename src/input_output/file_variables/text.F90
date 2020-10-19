@@ -57,7 +57,7 @@ contains
   !> Creates a file_variable_text_t object for an existing text file variable
   !! by name for input files, or a new file variable for output files.
   !!
-  function constructor_name( file, variable_name, config, found )             &
+  function constructor_name( file, variable_name, dimensions, config, found ) &
       result( new_obj )
 
     use musica_assert,                 only : die
@@ -71,10 +71,15 @@ contains
     class(file_t), intent(inout) :: file
     !> Variable name
     character(len=*), intent(in) :: variable_name
+    !> Variable dimensions
+    !!
+    !! Only required for adding a file variable
+    !!
+    type(file_dimension_range_t), intent(in), optional :: dimensions(:)
     !> Configuration describing how to match to MUSICA variables
     !!
     !! If omitted, standard matching is applied
-    class(config_t), intent(inout), optional :: config
+    type(config_t), intent(inout), optional :: config
     !> Optional flag that indicates whether the variable was found in the file
     logical, intent(out), optional :: found
 
@@ -127,7 +132,7 @@ contains
     !> Variable row or column position (starting from 1)
     integer(kind=musica_ik), intent(in) :: variable_id
     !> Configuration describing how to match to MUSICA variables
-    class(config_t), intent(inout) :: config
+    type(config_t), intent(inout) :: config
 
     character(len=*), parameter :: my_name = "text file variable constructor"
     type(string_t) :: var_name

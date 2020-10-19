@@ -19,6 +19,7 @@ module musica_array
   interface add_to_array
     module procedure :: add_char_to_array
     module procedure :: add_string_to_array
+    module procedure :: add_string_array_to_array
     module procedure :: add_integer_to_array
     module procedure :: add_logical_to_array
     module procedure :: add_real_to_array
@@ -71,7 +72,6 @@ contains
   !> Adds a string to an array of strings
   subroutine add_string_to_array( array, new_string )
 
-    use musica_assert,                 only : assert
     use musica_string,                 only : string_t
 
     !> Array to add to
@@ -82,6 +82,32 @@ contains
     call add_char_to_array( array, new_string%to_char( ) )
 
   end subroutine add_string_to_array
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Adds an array of strings to another array of strings
+  subroutine add_string_array_to_array( array, new_strings )
+
+    use musica_assert,                 only : assert
+    use musica_string,                 only : string_t
+
+    !> Array to add to
+    type(string_t), allocatable, intent(inout) :: array(:)
+    !> Strings to add to array
+    type(string_t), intent(in) :: new_strings(:)
+
+    type(string_t), allocatable :: temp_strings(:)
+
+    call assert( 561280828, allocated( array ) )
+    if( size( new_strings ) .eq. 0 ) return
+    allocate( temp_strings( size( array ) ) )
+    temp_strings(:) = array(:)
+    deallocate( array )
+    allocate( array( size( temp_strings ) + size( new_strings ) ) )
+    array( :size( temp_strings ) ) = temp_strings(:)
+    array( size( temp_strings ) + 1 : size( array ) ) = new_strings(:)
+
+  end subroutine add_string_array_to_array
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 

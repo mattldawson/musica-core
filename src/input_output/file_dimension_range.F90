@@ -34,6 +34,8 @@ module musica_file_dimension_range
   contains
     !> Sets the range
     procedure :: set
+    !> Get the dimension id
+    procedure :: id
     !> Gets the lower index bound (inclusive)
     procedure :: lower_bound
     !> Gets the upper index bound (inclusive)
@@ -100,6 +102,18 @@ contains
     this%upper_bound_  = upper_bound
 
   end subroutine set
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Get the dimension id
+  elemental integer(kind=musica_ik) function id( this )
+
+    !> File dimension range
+    class(file_dimension_range_t), intent(in) :: this
+
+    id = this%dimension_id_
+
+  end function id
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 

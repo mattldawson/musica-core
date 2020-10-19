@@ -44,12 +44,16 @@ module musica_input_output_processor
   contains
     !> Registers a state variable for output
     procedure :: register_output_variable
-    !> Get the times corresponding to entries (for input data) [s]
+    !> Gets the times corresponding to entries (for input data) [s]
     procedure :: entry_times__s
     !> Updates the model state with input data
     procedure :: update_state
+    !> Returns the names of all MUSICA variables set/read by the I/O processor
+    procedure :: musica_variable_names
     !> Outputs the current domain state
     procedure :: output
+    !> Preprocesses input/output processor configuration
+    procedure :: preprocess_input
     !> Print the input/output configuration information
     procedure :: print => do_print
     !> Loads input file variable names and units
@@ -96,20 +100,21 @@ contains
     use musica_assert,                 only : die_msg
     use musica_config,                 only : config_t
     use musica_domain,                 only : domain_t
+    use musica_file_dimension_factory, only : file_dimension_builder
     use musica_file_factory,           only : file_builder
     use musica_string,                 only : string_t
 
     !> New input/output processor
     type(input_output_processor_t), pointer :: new_obj
     !> Configuration data
-    class(config_t), intent(inout) :: config
+    type(config_t), intent(inout) :: config
     !> Model domain
     class(domain_t), intent(inout), optional :: domain
 
     character(len=*), parameter :: my_name = 'I/O processor constructor'
     type(string_t) :: temp_str
     logical :: found, is_input
-    type(config_t) :: linear_combos
+    type(config_t) :: linear_combos, time_config
 
     allocate( new_obj )
 
@@ -125,6 +130,10 @@ contains
                                  "during initialization for mapping." )
       end if
     else
+      call time_config%empty( )
+      call time_config%add( "type", new_obj%file_%type( ), my_name )
+      new_obj%time_ => file_dimension_builder( time_config, new_obj%file_,    &
+                                               dimension_name = "time" )
       allocate( new_obj%single_variable_updaters_( 0 ) )
       allocate( new_obj%linear_combination_updaters_( 0 ) )
     end if
@@ -137,9 +146,10 @@ contains
   subroutine register_output_variable( this, domain, domain_variable_name,    &
       units, io_variable_name )
 
-    use musica_assert,                 only : assert_msg
+    use musica_assert,                 only : assert, assert_msg
     use musica_config,                 only : config_t
     use musica_domain,                 only : domain_t
+    use musica_file_dimension_range,   only : file_dimension_range_t
     use musica_file_updater,           only : file_updater_t
     use musica_file_variable,          only : file_variable_t
     use musica_file_variable_factory,  only : file_variable_builder
@@ -167,30 +177,30 @@ contains
     type(file_updater_t), pointer :: updater
     type(file_updater_ptr), allocatable :: temp_updaters(:)
     logical :: is_match
+    ! there is currently only one dimension for output variables (time)
+    type(file_dimension_range_t) :: dims(1)
 
+    call assert( 181665946, associated( this%time_ ) )
+    dims(1) = this%time_%get_range( )
     file_name = this%file_%name( )
     call assert_msg( 567596084, this%file_%is_output( ),                      &
                      "Cannot register output of '"//                          &
                      domain_variable_name//"' to input file '"//              &
                      file_name%to_char( )//"'" )
-    call variable_config%empty( )
     call variable_config%add( "units", units, my_name )
     call variable_config%add( "MusicBox name", domain_variable_name, my_name )
-    call temp_config%empty( )
     call temp_config%add( io_variable_name, variable_config, my_name )
-    call variable_config%empty( )
     call variable_config%add( "properties", temp_config, my_name )
     call variable_config%add( "type", this%file_%type( ), my_name )
-    call temp_config%finalize( )
     if( present( io_variable_name ) ) then
       io_var_name = io_variable_name
     else
       io_var_name = domain_variable_name
     end if
     new_var => file_variable_builder( variable_config, this%file_,            &
-                                      variable_name = io_var_name%to_char( ) )
+                                      variable_name = io_var_name%to_char( ), &
+                                      dimensions = dims )
     updater => file_updater_t( this%file_, domain, new_var )
-    call variable_config%finalize( )
     call assert_msg( 987906252, associated( updater ),                        &
                      "Could not find domain state variable '"//               &
                      domain_variable_name//"' to register as '"//             &
@@ -218,11 +228,16 @@ contains
   !! and should thus correspond directly to the MUSICA simulation time.
   function entry_times__s( this )
 
+    use musica_assert,                 only : assert
+
     !> Entry times [s]
     real(kind=musica_dk), allocatable :: entry_times__s(:)
     !> Input/output
     class(input_output_processor_t), intent(inout) :: this
 
+    call assert( 579211287, associated( this%file_ ) )
+    call assert( 188228761, this%file_%is_input( ) )
+    call assert( 465439703, associated( this%time_ ) )
     entry_times__s = this%time_%get_values( )
 
   end function entry_times__s
@@ -238,7 +253,7 @@ contains
   !! If no time is provided the first entry in the input data will be used
   !! to update the domain state (used for initial conditions).
   !!
-  subroutine update_state( this, domain, domain_state, time__s )
+  subroutine update_state( this, domain, domain_state, time__s, tethered_only )
 
     use musica_assert,                 only : assert
     use musica_domain,                 only : domain_t, domain_state_t
@@ -251,12 +266,18 @@ contains
     class(domain_state_t), intent(inout) :: domain_state
     !> Current simulation time [s]
     real(kind=musica_dk), intent(in), optional :: time__s
+    !> Optional flag indicating whether to update for all or only tethered
+    !! file variables (defaults to false)
+    logical, intent(in), optional :: tethered_only
 
     integer(kind=musica_ik) :: i_data, i_updater
-    logical :: found
+    logical :: found, l_tethered_only
 
+    call assert( 967287335, associated( this%file_ ) )
     call assert( 682224647, this%file_%is_input( ) )
     i_data = 1
+    l_tethered_only = .false.
+    if( present( tethered_only ) ) l_tethered_only = tethered_only
     if( present( time__s ) ) then
       i_data = this%time_%get_index( time__s, is_exact = found,               &
                                      guess = this%last_time_index_ )
@@ -268,18 +289,57 @@ contains
     do i_updater = 1, size( this%linear_combination_updaters_ )
       associate( updater =>                                                   &
                  this%linear_combination_updaters_( i_updater )%val_ )
+      if( .not. updater%is_tethered( ) .and. l_tethered_only ) cycle
       call updater%update_state( this%file_, i_data, this%iterator_,          &
                                  domain_state )
       end associate
     end do
     do i_updater = 1, size( this%single_variable_updaters_ )
       associate( updater => this%single_variable_updaters_( i_updater )%val_ )
+      if( .not. updater%is_tethered( ) .and. l_tethered_only ) cycle
       call updater%update_state( this%file_, i_data, this%iterator_,          &
                                  domain_state )
       end associate
     end do
 
   end subroutine update_state
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Returns the names of all MUSICA variables read/set by the I/O processor
+  function musica_variable_names( this )
+
+    use musica_array,                  only : add_to_array
+    use musica_string,                 only : string_t
+
+    !> MUSICA variable names
+    type(string_t), allocatable :: musica_variable_names(:)
+    !> Input/output
+    class(input_output_processor_t), intent(in) :: this
+
+    integer(kind=musica_ik) :: i_updater
+
+    allocate( musica_variable_names( 0 ) )
+    if( allocated( this%single_variable_updaters_ ) ) then
+      do i_updater = 1, size( this%single_variable_updaters_ )
+        associate( updater =>                                                 &
+                   this%single_variable_updaters_( i_updater )%val_ )
+        call add_to_array( musica_variable_names,                             &
+                           updater%musica_variable_names( ) )
+        end associate
+      end do
+    end if
+    if( allocated( this%linear_combination_updaters_ ) ) then
+      do i_updater = 1, size( this%linear_combination_updaters_ )
+        associate( updater =>                                                 &
+                   this%linear_combination_updaters_( i_updater )%val_ )
+        call add_to_array( musica_variable_names,                             &
+                           updater%musica_variable_names( ) )
+        end associate
+      end do
+    end if
+
+  end function musica_variable_names
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -317,6 +377,78 @@ contains
     end do
 
   end subroutine output
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Preprocesses the input/output processor configuration
+  subroutine preprocess_input( this, config, default_variability )
+
+    use musica_assert,                 only : assert
+    use musica_config,                 only : config_t
+    use musica_string,                 only : string_t
+
+    !> Input/output
+    class(input_output_processor_t), intent(in) :: this
+    !> Input/output configuration data
+    type(config_t), intent(out) :: config
+    !> Default variability to assume for the file variables
+    !! "prognosed", "tethered", or "fixed"
+    character(len=*), intent(in) :: default_variability
+
+    character(len=*), parameter :: my_name = "I/O preprocessor"
+    integer(kind=musica_ik) :: i_updater, i_var
+    type(string_t) :: linear_combo_name
+    type(string_t), allocatable :: var_names(:)
+    type(config_t) :: linear_combo, linear_combos, vars, empty, tethered
+    logical :: default_tethered, found_custom_var
+
+    call config%empty( )
+    call empty%empty( )
+    call tethered%empty( )
+    call tethered%add( "variability", "tethered", my_name )
+    default_tethered = default_variability .eq. "tethered"
+    found_custom_var = .false.
+    if( allocated( this%single_variable_updaters_ ) ) then
+      do i_updater = 1, size( this%single_variable_updaters_ )
+        associate( updater => this%single_variable_updaters_( i_updater ) )
+        call assert( 994514267, associated( updater%val_ ) )
+        var_names = updater%val_%musica_variable_names( )
+        call assert( 915783652, size( var_names ) .eq. 1 )
+        if( updater%val_%is_tethered( ) .and. .not. default_tethered ) then
+          if( .not. found_custom_var ) then
+            call vars%empty( )
+            found_custom_var = .true.
+          end if
+          call vars%add( var_names( 1 )%to_char( ), tethered, my_name )
+        end if
+        end associate
+      end do
+      if( found_custom_var ) call config%add( "properties", vars, my_name )
+    end if
+    if( allocated( this%linear_combination_updaters_ ) ) then
+      if( size( this%linear_combination_updaters_ ) .gt. 0 ) then
+        call linear_combos%empty( )
+        do i_updater = 1, size( this%linear_combination_updaters_ )
+          associate( updater =>                                               &
+                     this%linear_combination_updaters_( i_updater ) )
+          call assert( 931411401, associated( updater%val_ ) )
+          var_names = updater%val_%musica_variable_names( )
+          call vars%empty( )
+          do i_var = 1, size( var_names )
+            call vars%add( var_names( i_var )%to_char( ), empty, my_name )
+          end do
+          call linear_combo%empty( )
+          call linear_combo%add( "properties", vars, my_name )
+          linear_combo_name = updater%val_%name( )
+          call linear_combos%add( linear_combo_name%to_char( ), linear_combo, &
+                                  my_name )
+          end associate
+        end do
+        call config%add( "linear combinations", linear_combos, my_name )
+      end if
+    end if
+
+  end subroutine preprocess_input
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -388,7 +520,6 @@ contains
                      found = found )
     if( found ) then
       call this%load_linear_combinations( domain, linear_combos )
-      call linear_combos%finalize( )
     else
       allocate( this%linear_combination_updaters_( 0 ) )
     end if
@@ -448,6 +579,7 @@ contains
     use musica_domain,                 only : domain_t
     use musica_file_updater,           only : file_updater_t
     use musica_iterator,               only : iterator_t
+    use musica_string,                 only : string_t
 
     !> Input/Output processor
     class(input_output_processor_t), intent(inout) :: this
@@ -461,6 +593,7 @@ contains
     class(iterator_t), pointer :: iter
     type(config_t) :: linear_combo_config
     integer(kind=musica_ik) :: i_linear_combo, n_linear_combos
+    type(string_t) :: combo_name
 
     iter => config%get_iterator( )
     n_linear_combos = 0
@@ -477,12 +610,13 @@ contains
       associate( lc_ptr =>                                                    &
                  this%linear_combination_updaters_( i_linear_combo ) )
       call config%get( iter, linear_combo_config, my_name )
-      lc_ptr%val_ => file_updater_t( this%file_, domain, linear_combo_config )
+      combo_name = config%key( iter )
+      lc_ptr%val_ => file_updater_t( combo_name, this%file_, domain,          &
+                                     linear_combo_config )
       if( .not. associated( lc_ptr%val_ ) ) then
         call linear_combo_config%print( )
         call die_msg( 110789656, "Could not create linear combination." )
       end if
-      call linear_combo_config%finalize( )
       end associate
     end do
     call assert( 101427158, i_linear_combo .eq. n_linear_combos )

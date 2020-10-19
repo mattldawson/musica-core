@@ -2,6 +2,7 @@
   "name" : "O2 optics",
   "from file" : {
     "file name" : "data/chebyshev.nc",
+    "default variability" : "fixed",
     "grid section dimension" : "nchebev_wave",
     "grid boundary dimension" : "nchebev_wave_edge",
     "properties" : {

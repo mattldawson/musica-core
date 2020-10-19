@@ -77,6 +77,9 @@ module musica_datetime
     !> @}
     !> Gets the date-time as a string in MM/DD/YYYY HH:MM:SS.SSS UTC form
     procedure :: to_string
+    !> Returns a configuration object that can be used to recreate the
+    !! datetime
+    procedure :: to_config
     !> Prints a date time
     procedure :: print => do_print
   end type datetime_t
@@ -93,9 +96,7 @@ contains
   !> Creates a datetime
   function constructor( config ) result( new_obj )
 
-    use musica_assert,                 only : assert_msg
     use musica_config,                 only : config_t
-    use musica_string,                 only : to_char
 
     !> New date-time
     type(datetime_t) :: new_obj
@@ -523,6 +524,31 @@ contains
                           in_utc%second_ - int(in_utc%second_)
 
   end function to_string
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Returns a configuration object that can be used to recreate the datetime
+  subroutine to_config( this, config )
+
+    use musica_config,                 only : config_t
+
+    !> Date-time
+    class(datetime_t) :: this
+    !> New configuration
+    type(config_t), intent(out) :: config
+
+    character(len=*), parameter :: my_name = "Date-Time configuration creator"
+
+    call this%validate( )
+    call config%add( "year",   this%year_,   my_name )
+    call config%add( "month",  this%month_,  my_name )
+    call config%add( "day",    this%day_,    my_name )
+    call config%add( "hour",   this%hour_,   my_name )
+    call config%add( "minute", this%minute_, my_name )
+    call config%add( "second", this%second_, my_name )
+    call config%add( "UTC offset", this%utc_offset__hr_, my_name )
+
+  end subroutine to_config
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 

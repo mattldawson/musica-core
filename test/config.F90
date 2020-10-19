@@ -58,11 +58,9 @@ contains
     call assert( 325100780, saa(2) .eq. "foo" )
     call assert( 202253821, saa(3) .eq. "barfoo" )
 
-    call b%finalize( )
     call a_file%get( "not there", b, my_name, found = found )
     call assert( 430701579, .not. found )
 
-    call b%finalize( )
     c = '{ "an int" : 13, "foo" : "bar" }'
     call a_file%get( "not there", b, my_name, default = c, found = found )
     call assert( 250468356, .not. found )
@@ -176,9 +174,6 @@ contains
 
     ! add config
 
-    call a%finalize( )
-    call b%finalize( )
-    call c%finalize( )
     a = '{ "some int" : 1263 }'
     b = '{ "some real" : 14.3, "some string" : "foo" }'
     call a%add( "sub props", b, my_name )
@@ -264,9 +259,6 @@ contains
 
     ! assignment
 
-    call a%finalize( )
-    call b%finalize( )
-    call c%finalize( )
     a = '{ "my favorite int" : 42 }'
     b = a
     call b%get( "my favorite int", ia, my_name )
@@ -275,11 +267,6 @@ contains
     c = sa
     call c%get( "another int", ia, my_name )
     call assert( 842650552, ia .eq. 532 )
-
-    call a%finalize( )
-    call a_file%finalize( )
-    call b%finalize( )
-    call c%finalize( )
 
     ! iterator
     a = '{ "my int" : 2,'//&
@@ -326,9 +313,52 @@ contains
     call a%get( iterator, ia, my_name )
     call assert( 162629794, ia .eq. 2 )
 
-    call a%finalize( )
-    call b%finalize( )
     deallocate( iterator )
+
+    ! merging
+    a = '{ "a key" : 12,'//&
+        '  "another key" : 14.2,'//&
+        '  "sub stuff" : {'//&
+        '    "orig key" : 72'//&
+        '  },'//&
+        '  "yet another key" : "hi" }'
+    b = '{ "a new key" : true, '//&
+        '  "sub stuff" : {'//&
+        '    "new key" : "foo"'//&
+        '  },'//&
+        '  "another new key" : 51 }'
+    call a%merge_in( b, my_name )
+    write(*,*) "merged:"
+    call a%print( )
+    call a%get( "a key", ia, my_name )
+    call assert( 111746421, ia .eq. 12 )
+    call a%get( "another key", da, my_name )
+    call assert( 838230743, almost_equal( da, 14.2d0 ) )
+    call a%get( "yet another key", sa, my_name )
+    call assert( 259845153, sa .eq. "hi" )
+    call a%get( "a new key", la, my_name )
+    call assert( 879275437, la )
+    call a%get( "another new key", ia, my_name )
+    call assert( 756880773, ia .eq. 51 )
+    call a%get( "sub stuff", c, my_name )
+    call c%get( "orig key", ia, my_name )
+    call assert( 172568249, ia .eq. 72 )
+    call c%get( "new key", sa, my_name )
+    call b%get( "a new key", la, my_name )
+    call assert( 816624866, la )
+    call b%get( "another new key", ia, my_name )
+    call assert( 877822198, ia .eq. 51 )
+    call b%get( "sub stuff", c, my_name )
+    call c%get( "new key", sa, my_name )
+    call assert( 597877923, sa .eq. "foo" )
+    call c%get( "orig key", ia, my_name, found = found )
+    call assert( 933379719, .not. found )
+    call b%get( "a key", ia, my_name, found = found )
+    call assert( 597164102, .not. found )
+    call b%get( "another key", da, my_name, found = found )
+    call assert( 293082976, .not. found )
+    call b%get( "yet another key", sa, my_name, found = found )
+    call assert( 907248953, .not. found )
 
   end subroutine test_config_t
 
@@ -398,10 +428,7 @@ call main_config%add( "my new int", 43, my_name )
 call main_config%get( "my new int", my_int, my_name )
 write(*,*) "my new int value: ", my_int
  
-! clean up all the config objects when you're done with them
-call main_config%finalize( )
-call sub_config%finalize( )
-call sub_real_config%finalize( )
+! clean up memory
 deallocate( iter )
 
   end subroutine config_example

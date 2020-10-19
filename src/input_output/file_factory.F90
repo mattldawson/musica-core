@@ -43,7 +43,7 @@ contains
     !> New input/output file object
     class(file_t), pointer :: new_file
     !> Input/output file configuration
-    class(config_t), intent(inout) :: config
+    type(config_t), intent(inout) :: config
 
     type(string_t) :: file_type
     character(len=*), parameter :: my_name = 'File builder'

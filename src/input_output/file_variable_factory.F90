@@ -29,23 +29,29 @@ contains
   !! - "nc" or "netcdf" (a NetCDF file)
   !!
   function file_variable_builder( config, file, variable_name, variable_id,   &
-      found ) result( new_variable )
+      dimensions, found ) result( new_variable )
 
     use musica_assert,                 only : assert_msg, die, die_msg
     use musica_config,                 only : config_t
     use musica_file,                   only : file_t
+    use musica_file_dimension_range,   only : file_dimension_range_t
     use musica_string,                 only : string_t
 
     !> New file variable
     class(file_variable_t), pointer :: new_variable
     !> Dimension configuration
-    class(config_t), intent(inout) :: config
+    type(config_t), intent(inout) :: config
     !> Input/Output file
     class(file_t), intent(inout) :: file
     !> Variable name
     character(len=*), intent(in), optional :: variable_name
     !> Variable ID
     integer(kind=musica_ik), intent(in), optional :: variable_id
+    !> Variable dimensions
+    !!
+    !! Only required when adding a new file variable
+    !!
+    type(file_dimension_range_t), intent(in), optional :: dimensions(:)
     !> Optional flag that indicates whether the variable was found in the
     !! file
     logical, intent(out), optional :: found
@@ -67,8 +73,8 @@ contains
         file_type .eq. 'text' .or.                                            &
         file_type .eq. 'csv' ) then
       if( present( variable_name ) ) then
-        new_variable => file_variable_text_t( file, variable_name, config,    &
-                                              found = found )
+        new_variable => file_variable_text_t( file, variable_name, dimensions,&
+                                              config, found )
       else if( present( variable_id ) ) then
         new_variable => file_variable_text_t( file, variable_id, config )
       else
@@ -77,8 +83,8 @@ contains
     else if( file_type .eq. 'nc' .or.                                         &
              file_type .eq. 'netcdf' ) then
       if( present( variable_name ) ) then
-        new_variable => file_variable_netcdf_t( file, variable_name, config,  &
-                                                found = found )
+        new_variable => file_variable_netcdf_t( file, variable_name,          &
+                                                dimensions, config, found )
       else if( present( variable_id ) ) then
         new_variable => file_variable_netcdf_t( file, variable_id, config )
       else

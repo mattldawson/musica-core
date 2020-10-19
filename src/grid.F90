@@ -134,7 +134,7 @@ contains
     !> New grid
     class(grid_t), pointer :: new_obj
     !> Grid configuration
-    class(config_t), intent(inout) :: config
+    type(config_t), intent(inout) :: config
     !> MUSICA units for the file variable
     character(len=*), intent(in) :: units
 
@@ -558,7 +558,7 @@ contains
     !> Grid
     class(grid_t), intent(inout) :: this
     !> Grid configuration
-    class(config_t), intent(inout) :: config
+    type(config_t), intent(inout) :: config
     !> MUSICA units for the file variable
     character(len=*), intent(in) :: units
 
@@ -611,7 +611,7 @@ contains
     !> Grid
     class(grid_t), intent(inout) :: this
     !> Grid configuration
-    class(config_t), intent(inout) :: config
+    type(config_t), intent(inout) :: config
     !> MUSICA units for the grid
     character(len=*), intent(in) :: units
 
@@ -674,7 +674,6 @@ contains
           file_dimension_builder( file_config, this%file_,                    &
                                   dimension_name = dim_name%to_char( ) )
     end if
-    call file_config%finalize( )
 
   end subroutine load_grid
 
@@ -691,7 +690,7 @@ contains
     !> Grid
     class(grid_t), intent(inout) :: this
     !> Grid configuration
-    class(config_t), intent(inout) :: config
+    type(config_t), intent(inout) :: config
 
     character(len=*), parameter :: my_name = "grid calculator"
     logical :: num_found, min_found, max_found
@@ -861,7 +860,6 @@ contains
 
     integer(kind=musica_ik) :: i_var
 
-    call this%file_config_%finalize( )
     if( associated( this%file_ ) ) deallocate( this%file_ )
     if( allocated( this%variables_ ) ) then
       do i_var = 1, size( this%variables_ )

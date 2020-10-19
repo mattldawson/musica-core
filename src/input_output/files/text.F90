@@ -592,8 +592,6 @@ contains
   !> Count the lines in a file
   function count_lines( this ) result( n_lines )
 
-    use musica_assert,                 only : assert
-
     !> Number of lines in the file
     integer(kind=musica_ik) :: n_lines
     !> Text file
@@ -601,9 +599,9 @@ contains
 
     integer :: io_status
 
-    call assert( 776402509, this%is_open_ )
-    call this%rewind( )
     n_lines = 0
+    if( .not. this%is_open_ ) return
+    call this%rewind( )
     do
       read( this%file_unit_, *, iostat = io_status )
       if( io_status .ne. 0 ) exit
@@ -704,6 +702,7 @@ contains
 
     integer(kind=musica_ik) :: i_var
 
+    if( .not. allocated( this%staged_data_ ) ) return
     write(this%file_unit_,'(D30.20)',advance="no")                            &
         this%staged_data_unlimited_value_
     do i_var = 1, size( this%staged_data_ )

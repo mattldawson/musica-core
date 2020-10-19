@@ -46,7 +46,16 @@ module musica_domain
   !! \todo develop a complete set of \c domain_t examples
   !!
   type, abstract :: domain_t
+    !> Flag indicating whether the domain configuration has been finalized
+    logical :: is_locked_ = .false.
   contains
+    !> Locks the domain configuration
+    procedure :: lock
+    !> Returns a flag indicating whether the domain configuration has been
+    !! locked
+    procedure :: is_locked
+    !> Returns the domain type as a string
+    procedure(domain_type), deferred :: type
     !> Creates a new state for the domain
     procedure(new_state), deferred :: new_state
 
@@ -184,6 +193,18 @@ module musica_domain
 interface
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+  !> Returns the domain type as a string
+  function domain_type( this )
+    use musica_string,                 only : string_t
+    import domain_t
+    !> Domain type
+    type(string_t) :: domain_type
+    !> Domain
+    class(domain_t), intent(in) :: this
+  end function domain_type
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
   !> Creates a new domain state object
   function new_state( this )
     import domain_t
@@ -191,7 +212,7 @@ interface
     !> New domain state
     class(domain_state_t), pointer :: new_state
     !> Domain
-    class(domain_t), intent(inout) :: this
+    class(domain_t), intent(in) :: this
   end function new_state
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -480,6 +501,30 @@ interface
 end interface
 
 contains
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Locks the domain configuration
+  subroutine lock( this )
+
+    !> Domain
+    class(domain_t), intent(inout) :: this
+
+    this%is_locked_ = .true.
+
+  end subroutine lock
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Returns whether the domain configuration has been locked
+  logical function is_locked( this )
+
+    !> Domain
+    class(domain_t), intent(in) :: this
+
+    is_locked = this%is_locked_
+
+  end function is_locked
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 

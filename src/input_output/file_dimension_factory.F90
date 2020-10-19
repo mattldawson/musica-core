@@ -39,7 +39,7 @@ contains
     !> New file dimension
     class(file_dimension_t), pointer :: new_dimension
     !> Dimension configuration
-    class(config_t), intent(inout) :: config
+    type(config_t), intent(inout) :: config
     !> Input/Output file
     class(file_t), intent(inout) :: file
     !> File variable associated with the dimension
