@@ -23,7 +23,6 @@ program test_O2_optics
 
   call config%from_file( 'data/test_O2_optics_config.json' )
   O2_optics => O2_optics_t( config )
-  call config%finalize( )
 
   effective_O2_cross_sections = O2_optics%per_section_property_array( )
   wavelength_boundaries       = O2_optics%boundaries( )

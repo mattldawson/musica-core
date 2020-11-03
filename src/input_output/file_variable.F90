@@ -17,6 +17,13 @@ module musica_file_variable
   public :: file_variable_t, file_variable_ptr, find_variable_by_name,    &
             find_variable_by_musica_name
 
+  !> @name Variability types
+  !! @{
+  integer(kind=musica_ik), parameter :: VARIABILITY_PROGNOSED = 1
+  integer(kind=musica_ik), parameter :: VARIABILITY_TETHERED  = 2
+  integer(kind=musica_ik), parameter :: VARIABILITY_FIXED     = 3
+  !! @}
+
   !> A File variable
   !!
   !! The file_variable_t handles all conversions, offsetting, scaling,
@@ -37,6 +44,8 @@ module musica_file_variable
     type(string_t) :: musica_units_
     !> Converter to MUSICA units
     type(convert_t) :: converter_
+    !> Type of variability specified in the configuration
+    integer(kind=musica_ik) :: variability_ = VARIABILITY_PROGNOSED
     !> Scaling factor
     real(kind=musica_dk) :: scale_factor_ = 1.0_musica_dk
     !> Offset (applied to file data after scaling and before unit conversion)
@@ -50,6 +59,15 @@ module musica_file_variable
     procedure :: musica_name
     !> Returns the name of one of the variable dimensions
     procedure :: dimension_name
+    !> Returns a flag indicating whether the variable is specified as being
+    !! "prognosed" during the simulation
+    procedure :: is_prognosed
+    !> Returns a flag indicating whether the variable is specified as being
+    !! "tethered" to input conditions
+    procedure :: is_tethered
+    !> Returns a flag indicating whether the variable is specified as being
+    !! "fixed" during the simulation
+    procedure :: is_fixed
     !> Returns the units used in the file for the variable
     procedure :: units
     !> Sets the MUSICA units for the variable
@@ -229,6 +247,45 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+  !> Returns a flag indicating whether the variable is specified as being
+  !! "prognosed" during the simulation
+  logical function is_prognosed( this )
+
+    !> File variable
+    class(file_variable_t), intent(in) :: this
+
+    is_prognosed = this%variability_ .eq. VARIABILITY_PROGNOSED
+
+  end function is_prognosed
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Returns a flag indicating whether the variable is specified as being
+  !! "tethered" to input conditions
+  logical function is_tethered( this )
+
+    !> File variable
+    class(file_variable_t), intent(in) :: this
+
+    is_tethered = this%variability_ .eq. VARIABILITY_TETHERED
+
+  end function is_tethered
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Returns a flag indicating whether the variable is specified as being
+  !! "fixed" during the simulation
+  logical function is_fixed( this )
+
+    !> File variable
+    class(file_variable_t), intent(in) :: this
+
+    is_fixed = this%variability_ .eq. VARIABILITY_FIXED
+
+  end function is_fixed
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
   !> Returns the units used in the file for the variable
   type(string_t) function units( this )
 
@@ -360,6 +417,7 @@ contains
   !> Loads matching and conversion options specified in the configuration data
   subroutine load_configured_options( this, file, config )
 
+    use musica_assert,                 only : die_msg
     use musica_config,                 only : config_t
     use musica_file,                   only : file_t
 
@@ -370,14 +428,20 @@ contains
     !> Configuration describing how to match to MUSICA variables
     !!
     !! If omitted, standard matching is applied
-    class(config_t), intent(inout), optional :: config
+    type(config_t), intent(inout), optional :: config
 
     character(len=*), parameter :: my_name = "File variable matching"
     type(config_t) :: vars, var_data, shift_data
+    type(string_t) :: default_variability, variability
     logical :: found, general_match
 
     ! default to File variable name
     this%musica_name_ = this%name_
+
+    ! get the default variability (input variables only)
+    if( file%is_input( ) ) then
+      call config%get( "default variability", default_variability, my_name )
+    end if
 
     ! get specific property matching if present
     call config%get( "properties", vars, my_name, found = found )
@@ -390,7 +454,6 @@ contains
         call vars%get( "*", var_data, my_name, found = found )
         general_match = found
       end if
-      call vars%finalize( )
     end if
 
     ! update matching criteria as specified in configuration
@@ -399,13 +462,26 @@ contains
                          default = this%musica_name_%to_char( ) )
       call var_data%get( "units", this%units_, my_name,                       &
                          default = this%units_%to_char( ) )
+      if( file%is_input( ) ) then
+        call var_data%get( "variability", variability, my_name,               &
+                           default = default_variability%to_char( ) )
+        if( variability .eq. "prognosed" ) then
+          this%variability_ = VARIABILITY_PROGNOSED
+        else if( variability .eq. "tethered" ) then
+          this%variability_ = VARIABILITY_TETHERED
+        else if( variability .eq. "fixed" ) then
+          this%variability_ = VARIABILITY_FIXED
+        else
+          call die_msg( 180506671, "Invalid variability specified for "//     &
+                        "file variable '"//this%name_%to_char( )//"': '"//    &
+                        variability%to_char( )//"'" )
+        end if
+      end if
       call var_data%get( "shift first entry to", shift_data, my_name,         &
                          found = found )
       if( found ) then
         call this%set_shift( file, shift_data )
-        call shift_data%finalize( )
       end if
-      call var_data%finalize( )
       if( general_match ) then
         this%musica_name_ = this%musica_name_%replace( "*",                   &
                                                        this%name_%to_char( ) )
@@ -495,7 +571,7 @@ contains
     !> File variable
     class(file_variable_t), intent(inout) :: this
     !> Variable configuration
-    class(config_t), intent(inout) :: config
+    type(config_t), intent(inout) :: config
     !> Input/Output File
     class(file_t), intent(inout) :: file
     !> Name used in the file for the variable

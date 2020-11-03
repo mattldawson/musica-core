@@ -9,6 +9,7 @@ module musica_file_updater
 
   use musica_constants,                only : musica_dk, musica_ik
   use musica_file_paired_variable,     only : file_paired_variable_ptr
+  use musica_string,                   only : string_t
 
   implicit none
   private
@@ -22,6 +23,8 @@ module musica_file_updater
   !!
   type :: file_updater_t
     private
+    !> Name for the updater
+    type(string_t) :: name_
     !> Set of paired variables
     type(file_paired_variable_ptr), allocatable :: pairs_(:)
     !> Scaling factor (for linear combinations of variables)
@@ -30,11 +33,22 @@ module musica_file_updater
     real(kind=musica_dk), allocatable :: working_file_values_(:)
     !> Working array for updating MUSICA/file variables
     real(kind=musica_dk), allocatable :: working_musica_values_(:)
+    !> Flag indicating whether the variable is tethered
+    !! (Tethered variables are allowed to vary during the simulation, but are
+    !!  reset to the input value at the end of every time step.)
+    logical :: is_tethered_ = .false.
   contains
+    !> Returns the name of the updater
+    procedure :: name => updater_name
+    !> Returns the standard MUSICA file name for the variable
     !> Indicates whether a specified variable is used in the updater
     procedure :: includes_variable
+    !> Returns whether the paired variable(s) is (are) tethered
+    procedure :: is_tethered
     !> Updates the state for a given index in the temporal dimension
     procedure :: update_state
+    !> Returns the names of the MUSICA variables read/set by the updater
+    procedure :: musica_variable_names
     !> Outputs data to the file
     procedure :: output
     !> Prints the properties of the updater
@@ -90,6 +104,8 @@ contains
     allocate( new_obj%working_file_values_( 1 ) )
     allocate( new_obj%working_musica_values_( 1 ) )
     new_obj%pairs_( 1 )%val_ => pair
+    new_obj%is_tethered_ = variable%is_tethered( )
+    new_obj%name_        = variable%musica_name( )
 
   end function constructor_single_variable
 
@@ -100,7 +116,7 @@ contains
   !! If any of the specified variables cannot be found in the file or the
   !! MUSICA domain, a null pointer is returned.
   !!
-  function constructor_linear_combination( file, domain, config )             &
+  function constructor_linear_combination( name, file, domain, config )       &
       result( new_obj )
 
     use musica_assert,                 only : assert_msg
@@ -111,16 +127,17 @@ contains
     use musica_file_variable,          only : file_variable_t
     use musica_file_variable_factory,  only : file_variable_builder
     use musica_iterator,               only : iterator_t
-    use musica_string,                 only : string_t
 
     !> New updater for MUSICA<->File linear combination of variables
     type(file_updater_t), pointer :: new_obj
+    !> Name for the linear combination
+    type(string_t), intent(in) :: name
     !> File to update from
     class(file_t), intent(inout) :: file
     !> Model domain
     class(domain_t), intent(inout) :: domain
     !> Linear combination configuration
-    class(config_t), intent(inout) :: config
+    type(config_t), intent(inout) :: config
 
     character(len=*), parameter :: my_name =                                  &
         "File linear combination updater constructor"
@@ -141,6 +158,8 @@ contains
     allocate( new_obj%pairs_( n_vars ) )
     allocate( new_obj%working_file_values_( n_vars ) )
     allocate( new_obj%working_musica_values_( n_vars ) )
+    new_obj%is_tethered_ = .true.
+    new_obj%name_        = name
     call config%get( "scale factor", new_obj%scale_factor_, my_name,          &
                      default = new_obj%scale_factor_ )
     call iter%reset( )
@@ -150,8 +169,8 @@ contains
       call props%get( iter, var_config, my_name )
       var_name = props%key( iter )
       call var_config%add( "type", file%type( ), my_name )
+      call var_config%add( "default variability", "tethered", my_name )
       var => file_variable_builder( var_config, file, var_name%to_char( ) )
-      call var_config%finalize( )
       call assert_msg( 659534542, associated( var ), "Could not find "//      &
                        "MUSICA domain variable '"//var_name%to_char( )//"'" )
       pair => file_paired_variable_t( file, domain, var, .true. )
@@ -163,10 +182,21 @@ contains
       new_obj%pairs_( i_var )%val_ => pair
       deallocate( var )
     end do
-    call props%finalize( )
     deallocate( iter )
 
   end function constructor_linear_combination
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Returns the name of the updater
+  type(string_t) function updater_name( this )
+
+    !> File updater
+    class(file_updater_t), intent(in) :: this
+
+    updater_name = this%name_
+
+  end function updater_name
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -196,6 +226,18 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+  !> Returns whether the variable(s) is (are) tethered to input conditions
+  logical function is_tethered( this )
+
+    !> File updater
+    class(file_updater_t), intent(in) :: this
+
+    is_tethered = this%is_tethered_
+
+  end function is_tethered
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
   !> Updates a domain state for a given index in the temporal dimension
   subroutine update_state( this, file, index, iterator, state )
 
@@ -220,8 +262,6 @@ contains
 
     call assert( 381356243, allocated( this%pairs_ ) )
     call iterator%reset( )
-    file_total   = 0.0_musica_dk
-    musica_total = 0.0_musica_dk
     do while( iterator%next( ) )
       if( size( this%pairs_ ) .eq. 1 ) then
         associate( pair => this%pairs_( 1 )%val_ )
@@ -230,6 +270,8 @@ contains
         end associate
         cycle
       end if
+      file_total   = 0.0_musica_dk
+      musica_total = 0.0_musica_dk
       do i_pair = 1, size( this%pairs_ )
         associate( pair => this%pairs_( i_pair )%val_ )
         this%working_file_values_( i_pair ) =                                 &
@@ -259,6 +301,29 @@ contains
     end do
 
   end subroutine update_state
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Returns the names of the MUSICA variables read/set by the updater
+  function musica_variable_names( this )
+
+    use musica_assert,                 only : assert
+
+    !> MUSICA variable names
+    type(string_t), allocatable :: musica_variable_names(:)
+    !> File updater
+    class(file_updater_t), intent(in) :: this
+
+    integer(kind=musica_ik) :: i_pair
+
+    call assert( 973607705, allocated( this%pairs_ ) )
+    allocate( musica_variable_names( size( this%pairs_ ) ) )
+    do i_pair = 1, size( this%pairs_ )
+      musica_variable_names( i_pair ) =                                       &
+          this%pairs_( i_pair )%val_%musica_name( )
+    end do
+
+  end function musica_variable_names
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 

@@ -110,38 +110,30 @@ contains
              ' "minute" : 56, "second" : 11.0 }'
     a = datetime_t( config )
     call assert( 257223594, a%in_seconds( ) .eq. 63733474571.0_musica_dk )
-    call config%finalize( )
 
     ! check leap years
     config = '{ "year" : 2015, "month" : 3, "day" : 23 }'
     a = datetime_t( config )
     call assert( 625147004, .not. a%is_leap_year( ) )
-    call config%finalize( )
     config = '{ "year" : 2020, "month" : 1, "day" : 1 }'
     a = datetime_t( config )
     call assert( 953478959, a%is_leap_year( ) )
-    call config%finalize( )
     config = '{ "year" : 1000, "month" : 7, "day" : 12 }'
     a = datetime_t( config )
     call assert( 124036390, .not. a%is_leap_year( ) ) ! multiple of 100
-    call config%finalize( )
     config = '{ "year" : 1200, "month" : 7, "day" : 12 }'
     a = datetime_t( config )
     call assert( 852426246, a%is_leap_year( ) ) ! multiple of 400
-    call config%finalize( )
 
     ! check UTC offsets
     config = '{ "year" : 2020, "month" : 1, "day" : 1, "hour" : 3 }'
     a = datetime_t( config )
-    call config%finalize( )
     config = '{ "year" : 2020, "month" : 1, "day" : 1, "hour" : 3,            &
                 "UTC offset" : -9.5 }'
     b = datetime_t( config )
-    call config%finalize( )
     config = '{ "year" : 2020, "month" : 1, "day" : 1, "hour" : 3,            &
                 "UTC offset" : 6.0 }'
     c = datetime_t( config )
-    call config%finalize( )
     call assert( 261683299, a%in_seconds( ) .eq. b%in_seconds( )              &
                                                  + 9.5 * hour_in_seconds )
     call assert( 261683299, a%in_seconds( ) .eq. c%in_seconds( )              &
@@ -154,7 +146,6 @@ contains
     ! check for precision loss
     config = '{ "year" : 3000, "month" : 1, "day" : 1 }'
     a = datetime_t( config )
-    call config%finalize( )
     b = a%add_seconds( 0.001_musica_dk )
     call assert( 844935336, almost_equal( a%in_seconds( ) + 0.001_musica_dk,  &
                                           b%in_seconds( ) ) )

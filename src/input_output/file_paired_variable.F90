@@ -11,6 +11,7 @@ module musica_file_paired_variable
   use musica_domain,                   only : domain_state_accessor_t,        &
                                               domain_state_mutator_t
   use musica_file_variable,            only : file_variable_t
+  use musica_string,                   only : string_t
 
   implicit none
   private
@@ -23,6 +24,8 @@ module musica_file_paired_variable
   !> Data for a single paired MUSICA <-> file variable
   type :: file_paired_variable_t
     private
+    !> MUSICA variable name
+    type(string_t) :: musica_name_
     !> Mutator for the variable
     class(domain_state_mutator_t), pointer :: mutator_ => null( )
     !> Accessor for the variable
@@ -39,14 +42,16 @@ module musica_file_paired_variable
     !> Returns a flag indicating whether the pair includes a given file
     !! variable
     procedure :: includes_variable
-    !> Get a value from the file
+    !> Gets a value from the file
     procedure :: get_file_value
-    !> Set a value in the file
+    !> Sets a value in the file
     procedure :: set_file_value
-    !> Get a MUSICA domain state value
+    !> Gets a MUSICA domain state value
     procedure :: get_musica_value
-    !> Set a MUSICA domain state value
+    !> Sets a MUSICA domain state value
     procedure :: set_musica_value
+    !> MUSICA variable name
+    procedure :: musica_name
     !> Prints the properties of the paired variable
     procedure :: print => do_print
     !> Updates the staged data
@@ -81,7 +86,6 @@ contains
     use musica_domain,                 only : domain_t
     use musica_file,                   only : file_t
     use musica_file_variable,          only : file_variable_t
-    use musica_string,                 only : string_t
 
     !> New MUSICA<->File variable match
     type(file_paired_variable_t), pointer :: new_obj
@@ -119,6 +123,7 @@ contains
                                                        std_units%to_char( ),  & !- MUSICA units
                                                        my_name )
     end if
+    new_obj%musica_name_ = var_name
 
   end function constructor
 
@@ -233,6 +238,20 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+  !> Returns the MUSICA variable name
+  function musica_name( this )
+
+    !> MUSICA variable name
+    type(string_t) :: musica_name
+    !> Paired variable
+    class(file_paired_variable_t), intent(in) :: this
+
+    musica_name = this%musica_name_
+
+  end function musica_name
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
   !> Prints the contents of the updater
   subroutine do_print( this )
 
@@ -298,7 +317,6 @@ contains
   logical function do_match( domain, variable )
 
     use musica_domain,                 only : domain_t
-    use musica_string,                 only : string_t
 
     !> MUSICA domain
     class(domain_t), intent(inout) :: domain

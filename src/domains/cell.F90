@@ -44,8 +44,6 @@ module musica_domain_cell
   !> Model domain for a collection of unrelated cells or boxes
   type, extends(domain_t) :: domain_cell_t
     private
-    !> Flag indicating that no more properties can be registered
-    logical :: is_locked = .false.
     !> Number of cells in the domain
     integer(kind=musica_ik) :: number_of_cells_ = 1
     !> Names of the registered cell properties
@@ -63,6 +61,8 @@ module musica_domain_cell
     !> Registered accessors
     type(registered_pair_t), allocatable :: accessors_(:)
   contains
+    !> Returns the domain type as a string
+    procedure :: type => domain_type
     !> Creates a new state for the domain
     procedure :: new_state
 
@@ -221,7 +221,7 @@ contains
     !> Pointer to the new domain
     type(domain_cell_t), pointer :: new_domain
     !> Domain configuration data
-    class(config_t), intent(inout) :: config
+    type(config_t), intent(inout) :: config
 
     allocate( new_domain )
     allocate( new_domain%properties_(              0 ) )
@@ -236,19 +236,33 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+  !> Returns the domain type as a string
+  function domain_type( this )
+
+    !> Domain type
+    type(string_t) :: domain_type
+    !> Domain
+    class(domain_cell_t), intent(in) :: this
+
+    domain_type = "cell"
+
+  end function domain_type
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
   !> Creates a new domain state object
   function new_state( this )
+
+    use musica_assert,                 only : assert
 
     !> New domain state
     class(domain_state_t), pointer :: new_state
     !> Domain
-    class(domain_cell_t), intent(inout) :: this
+    class(domain_cell_t), intent(in) :: this
 
     integer :: n_prop, n_flag, i_prop, i_flag
 
-    ! make sure no properties can be registered after a state has been created
-    this%is_locked = .true.
-
+    call assert( 336367422, this%is_locked( ) )
     n_prop = size( this%properties_ )
     n_flag = size( this%flags_ )
 
@@ -297,10 +311,6 @@ contains
 
     call assert( 600322248, len( trim( variable_name ) ) .gt. 0 )
 
-    call assert_msg( 366771761, .not. this%is_locked, "Attempting to "//      &
-                     "register state variable '"//trim( variable_name )//     &
-                     "' after a domain state has been created." )
-
     ! find the property or create it if it doesn't exist
     if( find_string_in_array( this%properties_,                               &
                               variable_name, property_id ) ) then
@@ -317,6 +327,10 @@ contains
                        to_char( this%property_default_values_(                &
                                                           property_id ) ) )
     else
+      call assert_msg( 366771761, .not. this%is_locked( ), "Attempting to "// &
+                       "register state variable '"//trim( variable_name )//   &
+                       "' after a domain state has been created." )
+
       call add_to_array( this%properties_, variable_name )
       call add_to_array( this%property_units_, units )
       call add_to_array( this%property_default_values_, default_value )
@@ -355,10 +369,6 @@ contains
 
     call assert( 152214984, len( trim( variable_name ) ) .gt. 0 )
 
-    call assert_msg( 298856883, .not. this%is_locked, "Attempting to "//      &
-                     "register state variable set '"//trim( variable_name )// &
-                     "' after a domain state has been created." )
-
     do i_prop = 1, size( component_names )
       full_name = trim( variable_name )//"%"//component_names( i_prop )
 
@@ -379,6 +389,11 @@ contains
                          to_char( this%property_default_values_(              &
                                                          property_id ) ) )
       else
+        call assert_msg( 298856883, .not. this%is_locked( ),                  &
+                         "Attempting to register state variable set '"//      &
+                         trim( variable_name )//                              &
+                         "' after a domain state has been created." )
+
         call add_to_array( this%properties_, full_name%to_char( ) )
         call add_to_array( this%property_units_, units )
         call add_to_array( this%property_default_values_, default_value )
@@ -411,10 +426,6 @@ contains
 
     call assert( 209339722, len( trim( flag_name ) ) .gt. 0 )
 
-    call assert_msg( 242923858, .not. this%is_locked, "Attempting to "//      &
-                     "regsiter state flag '"//trim( flag_name )//             &
-                     "' after a domain state has been created." )
-
     ! find the flag or create it if it doesn't exist
     if( find_string_in_array( this%flags_, flag_name, flag_id ) ) then
       call assert_msg( 418849550, default_value .eqv.                         &
@@ -423,6 +434,10 @@ contains
                        trim( flag_name )//"' != '"//                          &
                        to_char( this%flag_default_values_( flag_id ) ) )
     else
+      call assert_msg( 242923858, .not. this%is_locked( ), "Attempting to "// &
+                       "regsiter state flag '"//trim( flag_name )//           &
+                       "' after a domain state has been created." )
+
       call add_to_array( this%flags_, flag_name )
       call add_to_array( this%flag_default_values_, default_value )
       flag_id = size( this%flags_ )
