@@ -275,7 +275,7 @@ contains
       do i_pair = 1, size( this%pairs_ )
         associate( pair => this%pairs_( i_pair )%val_ )
         this%working_file_values_( i_pair ) =                                 &
-            pair%get_file_value( file, index )
+            pair%get_file_value( file, index ) * this%scale_factor_
         this%working_musica_values_( i_pair ) =                               &
             pair%get_musica_value( state, iterator )
         file_total   = file_total   + this%working_file_values_( i_pair )
@@ -285,15 +285,15 @@ contains
       if( musica_total .eq. 0.0_musica_dk ) then
         do i_pair = 1, size( this%pairs_ )
           associate( pair => this%pairs_( i_pair )%val_ )
-          new_value = this%working_file_values_( i_pair ) * this%scale_factor_
+          new_value = this%working_file_values_( i_pair )
           call pair%set_musica_value( state, iterator, new_value )
           end associate
         end do
       else
         do i_pair = 1, size( this%pairs_ )
           associate( pair => this%pairs_( i_pair )%val_ )
-          new_value = ( this%working_musica_values_( i_pair ) /               &
-                        musica_total * file_total ) * this%scale_factor_
+          new_value = this%working_musica_values_( i_pair ) / musica_total    &
+                      * file_total
           call pair%set_musica_value( state, iterator, new_value )
           end associate
         end do
