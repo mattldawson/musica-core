@@ -8,7 +8,7 @@
 module musica_initial_conditions
 
   use musica_constants,                only : musica_dk, musica_ik
-  use musica_domain,                   only : domain_state_mutator_t
+  use musica_domain_state_mutator,     only : domain_state_mutator_t
   use musica_input_output_processor,   only : input_output_processor_ptr
   use musica_string
 

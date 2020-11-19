@@ -10,9 +10,9 @@ module musica_domain_cell
   use musica_constants,                only : musica_dk, musica_ik,           &
                                               musica_lk, musica_rk
   use musica_domain,                   only : domain_t, domain_state_t,       &
-                                              domain_iterator_t,              &
-                                              domain_state_mutator_t,         &
-                                              domain_state_accessor_t
+                                              domain_iterator_t
+  use musica_domain_state_accessor,    only : domain_state_accessor_t
+  use musica_domain_state_mutator,     only : domain_state_mutator_t
   use musica_property,                 only : property_ptr
   use musica_property_set,             only : property_set_t
   use musica_string,                   only : string_t
@@ -346,7 +346,7 @@ contains
 
     use musica_assert,                 only : assert, assert_msg, die_msg
     use musica_data_type,              only : data_type_t
-    use musica_domain,                 only : domain_state_mutator_ptr
+    use musica_domain_state_mutator,   only : domain_state_mutator_ptr
     use musica_property,               only : property_t
     use musica_target,                 only : target_t
 
@@ -475,7 +475,7 @@ contains
 
     use musica_assert,                 only : assert, assert_msg, die_msg
     use musica_data_type,              only : data_type_t
-    use musica_domain,                 only : domain_state_accessor_ptr
+    use musica_domain_state_accessor,  only : domain_state_accessor_ptr
     use musica_property,               only : property_t
     use musica_target,                 only : target_t
 

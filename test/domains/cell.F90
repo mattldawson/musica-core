@@ -26,12 +26,12 @@ contains
     use musica_data_type,              only : kBoolean, kDouble, kFloat,      &
                                               kInteger
     use musica_domain,                 only : domain_t, domain_state_t,       &
-                                              domain_state_mutator_t,         &
-                                              domain_state_mutator_ptr,       &
-                                              domain_state_accessor_t,        &
-                                              domain_state_accessor_ptr,      &
                                               domain_iterator_t,              &
                                               target_cells_t
+    use musica_domain_state_mutator,   only : domain_state_mutator_t,         &
+                                              domain_state_mutator_ptr
+    use musica_domain_state_accessor,  only : domain_state_accessor_t,        &
+                                              domain_state_accessor_ptr
     use musica_property,               only : property_ptr, property_t
     use musica_property_set,           only : property_set_t
     use musica_string,                 only : string_t, to_char

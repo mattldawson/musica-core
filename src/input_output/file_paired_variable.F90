@@ -8,8 +8,8 @@
 module musica_file_paired_variable
 
   use musica_constants,                only : musica_dk, musica_ik
-  use musica_domain,                   only : domain_state_accessor_t,        &
-                                              domain_state_mutator_t
+  use musica_domain_state_accessor,    only : domain_state_accessor_t
+  use musica_domain_state_mutator,     only : domain_state_mutator_t
   use musica_file_variable,            only : file_variable_t
   use musica_string,                   only : string_t
 

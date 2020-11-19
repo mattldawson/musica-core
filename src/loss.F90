@@ -8,8 +8,8 @@
 module musica_loss
 
   use musica_constants,                only : musica_dk, musica_ik
-  use musica_domain,                   only : domain_state_accessor_t,        &
-                                              domain_state_mutator_t
+  use musica_domain_state_accessor,    only : domain_state_accessor_t
+  use musica_domain_state_mutator,     only : domain_state_mutator_t
 
   implicit none
   private
@@ -65,8 +65,8 @@ contains
 
     use musica_data_type,              only : kDouble
     use musica_domain,                 only : domain_t,                       &
-                                              domain_state_accessor_ptr,      &
                                               target_cells_t
+    use musica_domain_state_accessor,  only : domain_state_accessor_ptr
     use musica_property,               only : property_t
     use musica_string,                 only : string_t
 

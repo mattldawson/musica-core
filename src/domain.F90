@@ -8,6 +8,10 @@
 module musica_domain
 
   use musica_constants,                only : musica_dk, musica_ik
+  use musica_domain_state_accessor,    only : domain_state_accessor_t,        &
+                                              domain_state_accessor_ptr
+  use musica_domain_state_mutator,     only : domain_state_mutator_t,         &
+                                              domain_state_mutator_ptr
   use musica_iterator,                 only : iterator_t
   use musica_property_set,             only : property_set_t
   use musica_target,                   only : target_t
@@ -15,10 +19,8 @@ module musica_domain
   implicit none
   private
 
-  public :: domain_t, domain_state_t, domain_state_mutator_t,                 &
-            domain_state_accessor_t, domain_iterator_t,                       &
-            domain_ptr, domain_state_ptr, domain_state_mutator_ptr,           &
-            domain_state_accessor_ptr, domain_iterator_ptr, target_cells_t,   &
+  public :: domain_t, domain_state_t, domain_iterator_t,                      &
+            domain_ptr, domain_state_ptr, domain_iterator_ptr, target_cells_t,&
             target_columns_t, target_surface_cells_t, target_model_top_cells_t
 
   !> A model domain of abstract structure
@@ -104,20 +106,6 @@ module musica_domain
     procedure(state_update), deferred :: update
   end type domain_state_t
 
-  !> Abstract domain state mutator
-  type, abstract :: domain_state_mutator_t
-  contains
-    !> Returns the property modified by the mutator
-    procedure(mutator_property), deferred :: property
-  end type domain_state_mutator_t
-
-  !> Abstract domain state accessor
-  type, abstract :: domain_state_accessor_t
-  contains
-    !> Returns the property accessed by the accessor
-    procedure(accessor_property), deferred :: property
-  end type domain_state_accessor_t
-
   !> Domain iterator
   type, abstract, extends(iterator_t) :: domain_iterator_t
   end type domain_iterator_t
@@ -138,20 +126,6 @@ module musica_domain
   contains
     final :: domain_state_ptr_finalize
   end type domain_state_ptr
-
-  !> Mutator pointer
-  type domain_state_mutator_ptr
-    class(domain_state_mutator_t), pointer :: val_ => null( )
-  contains
-    final :: domain_state_mutator_ptr_finalize
-  end type domain_state_mutator_ptr
-
-  !> Accessor pointer
-  type domain_state_accessor_ptr
-    class(domain_state_accessor_t), pointer :: val_ => null( )
-  contains
-    final :: domain_state_accessor_ptr_finalize
-  end type domain_state_accessor_ptr
 
   !> Iterator pointer
   type domain_iterator_ptr
@@ -224,9 +198,9 @@ interface
 
   !> Requests a mutator for a domain state property
   function mutator( this, property ) result( new_mutator )
+    use musica_domain_state_mutator,   only : domain_state_mutator_t
     use musica_property,               only : property_t
     import domain_t
-    import domain_state_mutator_t
     !> Mutator for the requested state variable
     class(domain_state_mutator_t), pointer :: new_mutator
     !> Domain
@@ -245,9 +219,9 @@ interface
   function mutator_set( this, variable_name, units, data_type, applies_to,    &
       requestor ) result( new_mutators )
     use musica_data_type,              only : data_type_t
+    use musica_domain_state_mutator,   only : domain_state_mutator_ptr
     use musica_target,                 only : target_t
     import domain_t
-    import domain_state_mutator_ptr
     !> Mutators for the requested state variable set
     class(domain_state_mutator_ptr), pointer :: new_mutators(:)
     !> Domain
@@ -269,8 +243,8 @@ interface
   !> Requests a accessor for a domain state property
   function accessor( this, property ) result( new_accessor )
     use musica_property,               only : property_t
+    use musica_domain_state_accessor,  only : domain_state_accessor_t
     import domain_t
-    import domain_state_accessor_t
     !> Accessor for the requested state variable
     class(domain_state_accessor_t), pointer :: new_accessor
     !> Domain
@@ -289,9 +263,9 @@ interface
   function accessor_set( this, variable_name, units, data_type, applies_to,    &
       requestor ) result( new_accessors )
     use musica_data_type,              only : data_type_t
+    use musica_domain_state_accessor,  only : domain_state_accessor_ptr
     use musica_target,                 only : target_t
     import domain_t
-    import domain_state_accessor_ptr
     !> Accessors for the requested state variable set
     class(domain_state_accessor_ptr), pointer :: new_accessors(:)
     !> Domain
@@ -367,7 +341,7 @@ interface
   !! The value returned will be in the units specified when the accessor was
   !! created.
   subroutine state_get( this, iterator, accessor, state_value )
-    import domain_state_accessor_t
+    use musica_domain_state_accessor,  only : domain_state_accessor_t
     import domain_iterator_t
     import domain_state_t
     !> Domain state
@@ -387,7 +361,7 @@ interface
   !! The units for the value passed to this function must be the same as
   !! those specified when the mutator was created.
   subroutine state_update( this, iterator, mutator, state_value )
-    import domain_state_mutator_t
+    use musica_domain_state_mutator,   only : domain_state_mutator_t
     import domain_state_t
     import domain_iterator_t
     !> Domain state
@@ -399,30 +373,6 @@ interface
     !> New value
     class(*), intent(in) :: state_value
   end subroutine state_update
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Returns the property modified by the mutator
-  function mutator_property( this )
-    use musica_property,               only : property_t
-    import domain_state_mutator_t
-    !> Property modified
-    class(property_t), pointer :: mutator_property
-    !> Domain state mutator
-    class(domain_state_mutator_t), intent(in) :: this
-  end function mutator_property
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Returns the property accessed by the accessor
-  function accessor_property( this )
-    use musica_property,               only : property_t
-    import domain_state_accessor_t
-    !> Property accessed
-    class(property_t), pointer :: accessor_property
-    !> Domain state accessor
-    class(domain_state_accessor_t), intent(in) :: this
-  end function accessor_property
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 end interface
@@ -572,30 +522,6 @@ contains
     if( associated( this%val_ ) ) deallocate( this%val_ )
 
   end subroutine domain_state_ptr_finalize
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Finalize pointer
-  subroutine domain_state_mutator_ptr_finalize( this )
-
-    !> Domain pointer
-    type(domain_state_mutator_ptr), intent(inout) :: this
-
-    if( associated( this%val_ ) ) deallocate( this%val_ )
-
-  end subroutine domain_state_mutator_ptr_finalize
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Finalize pointer
-  subroutine domain_state_accessor_ptr_finalize( this )
-
-    !> Domain pointer
-    type(domain_state_accessor_ptr), intent(inout) :: this
-
-    if( associated( this%val_ ) ) deallocate( this%val_ )
-
-  end subroutine domain_state_accessor_ptr_finalize
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
