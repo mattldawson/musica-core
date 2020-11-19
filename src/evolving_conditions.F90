@@ -191,7 +191,7 @@ contains
       var_names = this%input_files_( i_file )%val_%musica_variable_names( )
       do i_var = 1, size( var_names )
         associate( var_name => var_names( i_var ) )
-        units = domain%cell_state_units( var_name%to_char( ) )
+        units = domain%units( var_name%to_char( ) )
         call evo_cond_file%register_output_variable( domain,                  & ! - model domain
                                                      var_name%to_char( ),     & ! - variable name
                                                      units%to_char( ) )         ! - units

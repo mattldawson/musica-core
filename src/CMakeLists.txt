@@ -30,12 +30,16 @@ set(MUSICA_SRC config.F90
                util/assert.F90
                util/constants.F90
                util/convert.F90
+               util/data_type.F90
                util/datetime.F90
                util/iterator.F90
                util/logger.F90
                util/map.F90
                util/math.F90
-               util/string.F90)
+               util/property.F90
+               util/property_set.F90
+               util/string.F90
+               util/target.F90)
 
 add_library(musicalib ${MUSICA_SRC})
 

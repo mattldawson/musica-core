@@ -7,7 +7,10 @@
 !> The abstract domain_t type and related functions
 module musica_domain
 
+  use musica_constants,                only : musica_dk, musica_ik
   use musica_iterator,                 only : iterator_t
+  use musica_property_set,             only : property_set_t
+  use musica_target,                   only : target_t
 
   implicit none
   private
@@ -15,7 +18,8 @@ module musica_domain
   public :: domain_t, domain_state_t, domain_state_mutator_t,                 &
             domain_state_accessor_t, domain_iterator_t,                       &
             domain_ptr, domain_state_ptr, domain_state_mutator_ptr,           &
-            domain_state_accessor_ptr, domain_iterator_ptr
+            domain_state_accessor_ptr, domain_iterator_ptr, target_cells_t,   &
+            target_columns_t, target_surface_cells_t, target_model_top_cells_t
 
   !> A model domain of abstract structure
   !!
@@ -46,104 +50,72 @@ module musica_domain
   !! \todo develop a complete set of \c domain_t examples
   !!
   type, abstract :: domain_t
+    private
     !> Flag indicating whether the domain configuration has been finalized
     logical :: is_locked_ = .false.
+    !> Set of properties that define the domain state
+    type(property_set_t), pointer :: properties_ => null( )
   contains
     !> Locks the domain configuration
     procedure :: lock
     !> Returns a flag indicating whether the domain configuration has been
     !! locked
     procedure :: is_locked
+    !> @name Registers domain state properties
+    !! @{
+    procedure, private :: register_property
+    procedure, private :: register_property_set
+    generic :: register => register_property, register_property_set
+    !! @}
+    !> Returns the set of registered properties for the domain
+    procedure :: properties
     !> Returns the domain type as a string
     procedure(domain_type), deferred :: type
     !> Creates a new state for the domain
     procedure(new_state), deferred :: new_state
-
-    !> @name Registers domain properities and state variables
-    !! @{
-
-    !> Registers a state variable for all cells
-    procedure(register_cell_state_variable), deferred ::                      &
-      register_cell_state_variable
-    !> Registers a named collection of state variables for all cells
-    procedure(register_cell_state_variable_set), deferred ::                  &
-      register_cell_state_variable_set
-    !> Registers a flag for all cells
-    procedure(register_cell_flag), deferred :: register_cell_flag
-
-    !> @}
-
-    !> @name Returns mutators for registered domain properties and state variables
-    !! @{
-
-    !> Gets a mutator for a state variable for all cells
-    procedure(cell_state_mutator), deferred :: cell_state_mutator
-    !> Gets mutators for a named collection of state variables for all
-    !! cells
-    procedure(cell_state_set_mutator), deferred :: cell_state_set_mutator
-    !> Gets a mutator for a flag for all cells
-    procedure(cell_flag_mutator), deferred :: cell_flag_mutator
-
-    !> @}
-
-    !> @name Returns accessors for registered domain properties and state variables
-    !! @{
-
-    !> Gets an accessor for a state variable for all cells
-    procedure(cell_state_accessor), deferred :: cell_state_accessor
-    !> Gets accessors for a named collection of state variables for all
-    !! cells
-    procedure(cell_state_set_accessor), deferred :: cell_state_set_accessor
-    !> Gets an accessor for a flag for all cells
-    procedure(cell_flag_accessor), deferred :: cell_flag_accessor
-
-    !> @}
-
-    !> Check if a property has been registered
-    !! @{
-
-    !> Check for a state variable for all cells
-    procedure(is_cell_state_variable), deferred :: is_cell_state_variable
-    !> Check for a flag for all cells
-    procedure(is_cell_flag), deferred :: is_cell_flag
-
-    !> @}
-
-    !> Gets units for registered properties
-    !! @{
-
-    !> Gets units for a state variable for all cells
-    procedure(cell_state_units), deferred :: cell_state_units
-
-    !> @}
-
-    !> @name Iterators over the domain
-    !! @{
-
-    !> Sets up an iterator over all domain cells
-    procedure(cell_iterator), deferred :: cell_iterator
-
-    !! @}
-
+    !> Requests a mutator for a domain state property
+    procedure(mutator), deferred :: mutator
+    !> Requests mutators for a domain state property set
+    procedure(mutator_set), deferred :: mutator_set
+    !> Requests an accessor for a domain state property
+    procedure(accessor), deferred :: accessor
+    !> Requests accessors for a domain state property set
+    procedure(accessor_set), deferred :: accessor_set
+    !> Indicates whether a domain state property exists
+    procedure(is_registered), deferred :: is_registered
+    !> Returns the units of a domain state property
+    procedure(units), deferred :: units
+    !> Returns an iterator for the domain or a supported domain subset
+    procedure(iterator), deferred :: iterator
     !> Outputs the registered mutators and accessors
     procedure(output_registry), deferred :: output_registry
+    !> Private constructor (should only be called by extending types)
+    procedure :: private_constructor
+    !> Private destructor (should only be called by extending types)
+    procedure :: private_destructor
   end type domain_t
 
   !> Abstract domain state
   type, abstract :: domain_state_t
   contains
-    !> Gets the value of a state variable
+    !> Gets the value of a state property
     procedure(state_get), deferred :: get
-    !> Updates the value of a state variable
+    !> Updates the value of a state property
     procedure(state_update), deferred :: update
   end type domain_state_t
 
   !> Abstract domain state mutator
   type, abstract :: domain_state_mutator_t
+  contains
+    !> Returns the property modified by the mutator
+    procedure(mutator_property), deferred :: property
   end type domain_state_mutator_t
 
   !> Abstract domain state accessor
   type, abstract :: domain_state_accessor_t
+  contains
+    !> Returns the property accessed by the accessor
+    procedure(accessor_property), deferred :: property
   end type domain_state_accessor_t
 
   !> Domain iterator
@@ -190,6 +162,39 @@ module musica_domain
 
   !> @}
 
+  !> Potential sub-domain targets for state properties and iterators
+  !! @{
+
+  !> All cells
+  type, extends(target_t) :: target_cells_t
+  contains
+    procedure :: name => target_cells_t_name
+    procedure :: equals_target => target_cells_t_equals_target
+  end type target_cells_t
+
+  !> All columns
+  type, extends(target_t) :: target_columns_t
+  contains
+    procedure :: name => target_columns_t_name
+    procedure :: equals_target => target_columns_t_equals_target
+  end type target_columns_t
+
+  !> All surface cells
+  type, extends(target_t) :: target_surface_cells_t
+  contains
+    procedure :: name => target_surface_cells_t_name
+    procedure :: equals_target => target_surface_cells_t_equals_target
+  end type target_surface_cells_t
+
+  !> All topmost model cells
+  type, extends(target_t) :: target_model_top_cells_t
+  contains
+    procedure :: name => target_model_top_cells_t_name
+    procedure :: equals_target => target_model_top_cells_t_equals_target
+  end type target_model_top_cells_t
+
+  !! @}
+
 interface
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -217,234 +222,132 @@ interface
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Registers a state variable for each cell in the domain
-  subroutine register_cell_state_variable( this, variable_name, units,        &
-      default_value, requestor )
-    use musica_constants,              only : musica_dk
-    import domain_t
-    !> Domain
-    class(domain_t), intent(inout) :: this
-    !> Name of the state variable to create
-    character(len=*), intent(in) :: variable_name
-    !> Units for the state variable
-    character(len=*), intent(in) :: units
-    !> Default value for the variable
-    real(kind=musica_dk), intent(in) :: default_value
-    !> Name of the model component requesting the variable
-    character(len=*), intent(in) :: requestor
-  end subroutine register_cell_state_variable
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Registers a named collection of state variables for each cell in the
-  !! domain
-  subroutine register_cell_state_variable_set( this, variable_name, units,    &
-      default_value, component_names, requestor )
-    use musica_constants,              only : musica_dk
-    use musica_string,                 only : string_t
-    import domain_t
-    !> Domain
-    class(domain_t), intent(inout) :: this
-    !> Name of the state variable to create
-    character(len=*), intent(in) :: variable_name
-    !> Units for the state variable
-    character(len=*), intent(in) :: units
-    !> Default value for the variable
-    real(kind=musica_dk), intent(in) :: default_value
-    !> Names for each component of the new variable set
-    type(string_t), intent(in) :: component_names(:)
-    !> Name of the model component requesting the variable
-    character(len=*), intent(in) :: requestor
-  end subroutine register_cell_state_variable_set
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Registers a flag property for each cell in the domain
-  subroutine register_cell_flag( this, flag_name, default_value, requestor )
-    import domain_t
-    !> Domain
-    class(domain_t), intent(inout) :: this
-    !> Name of the state variable to create
-    character(len=*), intent(in) :: flag_name
-    !> Default flag value
-    logical, intent(in) :: default_value
-    !> Name of the model component requesting the variable
-    character(len=*), intent(in) :: requestor
-  end subroutine register_cell_flag
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Gets a mutator for a registered state variable for each cell in the
-  !! domain
-  function cell_state_mutator( this, variable_name, units, requestor )  &
-      result( new_mutator )
+  !> Requests a mutator for a domain state property
+  function mutator( this, property ) result( new_mutator )
+    use musica_property,               only : property_t
     import domain_t
     import domain_state_mutator_t
-    !> Accessor for the requested state variable
+    !> Mutator for the requested state variable
     class(domain_state_mutator_t), pointer :: new_mutator
     !> Domain
     class(domain_t), intent(inout) :: this
-    !> Name of the variable to find
-    character(len=*), intent(in) :: variable_name
-    !> Units for the state variable
-    character(len=*), intent(in) :: units
-    !> Name of the model component requesting the mutator
-    character(len=*), intent(in) :: requestor
-  end function cell_state_mutator
+    !> Property to request mutator for
+    class(property_t), intent(in) :: property
+  end function mutator
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Gets a mutator for a registered named set of state variables for each
-  !! cell in the domain
-  function cell_state_set_mutator( this, variable_name, units,          &
-      component_names, requestor ) result( new_mutators )
-    use musica_string,                 only : string_t
+  !> Requests mutators for a set of domain state properties
+  !!
+  !! All members of the property set must have the same units and target
+  !! (sub)domain. Otherwise, the mutators must be requested individually.
+  !!
+  function mutator_set( this, variable_name, units, data_type, applies_to,    &
+      requestor ) result( new_mutators )
+    use musica_data_type,              only : data_type_t
+    use musica_target,                 only : target_t
     import domain_t
     import domain_state_mutator_ptr
-    !> Accessors for the requested state variable set
+    !> Mutators for the requested state variable set
     class(domain_state_mutator_ptr), pointer :: new_mutators(:)
     !> Domain
     class(domain_t), intent(inout) :: this
-    !> Name of the variable to find
+    !> Name of the property set
     character(len=*), intent(in) :: variable_name
-    !> Units for the state variable
+    !> Units for the property set members
     character(len=*), intent(in) :: units
-    !> Names of each component of the variable set
-    !!
-    !! The names are in the same order as the returned mutators
-    type(string_t), allocatable, intent(out) :: component_names(:)
-    !> Name of the model component requesting the mutator
+    !> Data type for the property set members
+    class(data_type_t), intent(in) :: data_type
+    !> Model element(s) to which the properties apply
+    class(target_t), intent(in) :: applies_to
+    !> Name of the model component requesting the mutators
     character(len=*), intent(in) :: requestor
-  end function cell_state_set_mutator
+  end function mutator_set
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Gets a mutator for a registered flag for each cell in the domain
-  function cell_flag_mutator( this, flag_name, requestor )                    &
-      result( new_mutator )
-    import domain_t
-    import domain_state_mutator_t
-    !> Accessor for the requested flag
-    class(domain_state_mutator_t), pointer :: new_mutator
-    !> Domain
-    class(domain_t), intent(inout) :: this
-    !> Name of the flag to find
-    character(len=*), intent(in) :: flag_name
-    !> Name of the model component requesting the mutator
-    character(len=*), intent(in) :: requestor
-  end function cell_flag_mutator
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Gets an accessor for a registered state variable for each cell in the
-  !! domain
-  function cell_state_accessor( this, variable_name, units, requestor )  &
-      result( new_accessor )
+  !> Requests a accessor for a domain state property
+  function accessor( this, property ) result( new_accessor )
+    use musica_property,               only : property_t
     import domain_t
     import domain_state_accessor_t
     !> Accessor for the requested state variable
     class(domain_state_accessor_t), pointer :: new_accessor
     !> Domain
     class(domain_t), intent(inout) :: this
-    !> Name of the variable to find
-    character(len=*), intent(in) :: variable_name
-    !> Units for the state variable
-    character(len=*), intent(in) :: units
-    !> Name of the model component requesting the accessor
-    character(len=*), intent(in) :: requestor
-  end function cell_state_accessor
+    !> Property to request accessor for
+    class(property_t), intent(in) :: property
+  end function accessor
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Gets accessors for a registered named set of state variables for each
-  !! cell in the domain
-  function cell_state_set_accessor( this, variable_name, units,          &
-      component_names, requestor ) result( new_accessors )
-    use musica_string,                 only : string_t
+  !> Requests accessors for a set of domain state properties
+  !!
+  !! All members of the property set must have the same units and target
+  !! (sub)domain. Otherwise, the accessors must be requested individually.
+  !!
+  function accessor_set( this, variable_name, units, data_type, applies_to,    &
+      requestor ) result( new_accessors )
+    use musica_data_type,              only : data_type_t
+    use musica_target,                 only : target_t
     import domain_t
     import domain_state_accessor_ptr
     !> Accessors for the requested state variable set
     class(domain_state_accessor_ptr), pointer :: new_accessors(:)
     !> Domain
     class(domain_t), intent(inout) :: this
-    !> Name of the variable to find
+    !> Name of the property set
     character(len=*), intent(in) :: variable_name
-    !> Units for the state variable
+    !> Units for the property set members
     character(len=*), intent(in) :: units
-    !> Names of each component of the variable set
-    !!
-    !! The names are in the same order as the returned accessors
-    type(string_t), allocatable, intent(out) :: component_names(:)
-    !> Name of the model component requesting the accessor
+    !> Data type for the property set members
+    class(data_type_t), intent(in) :: data_type
+    !> Model element(s) to which the properties apply
+    class(target_t), intent(in) :: applies_to
+    !> Name of the model component requesting the accessors
     character(len=*), intent(in) :: requestor
-  end function cell_state_set_accessor
+  end function accessor_set
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Gets an accessor for a registered flag for each cell in the domain
-  function cell_flag_accessor( this, flag_name, requestor )                   &
-      result( new_accessor )
-    import domain_t
-    import domain_state_accessor_t
-    !> Accessor for the requested flag
-    class(domain_state_accessor_t), pointer :: new_accessor
-    !> Domain
-    class(domain_t), intent(inout) :: this
-    !> Name of the flag to find
-    character(len=*), intent(in) :: flag_name
-    !> Name of the model component requesting the accessor
-    character(len=*), intent(in) :: requestor
-  end function cell_flag_accessor
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Returns whether a state variable has been registered for all cells
-  logical function is_cell_state_variable( this, variable_name )
-    use musica_string,                 only : string_t
+  !> Indicates whether a domain state property has been registered
+  logical function is_registered( this, property_name )
+    use musica_property,               only : property_t
     import domain_t
     !> Domain
     class(domain_t), intent(in) :: this
-    !> Name of the variable to look for
-    character(len=*), intent(in) :: variable_name
-  end function is_cell_state_variable
+    !> Name of the property to look for
+    character(len=*), intent(in) :: property_name
+  end function is_registered
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Returns whether a flag has been registered for all cells
-  logical function is_cell_flag( this, flag_name )
+  !> Returns the units of a domain state property
+  function units( this, property_name )
     use musica_string,                 only : string_t
     import domain_t
+    !> Units for the property
+    type(string_t) :: units
     !> Domain
     class(domain_t), intent(in) :: this
-    !> Name of the flag to look for
-    character(len=*), intent(in) :: flag_name
-  end function is_cell_flag
+    !> Name of the registered state property
+    character(len=*), intent(in) :: property_name
+  end function units
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Gets the units for a registered state variable for all cells
-  function cell_state_units( this, variable_name )
-    use musica_string,                 only : string_t
-    import domain_t
-    !> Units for the state variable
-    type(string_t) :: cell_state_units
-    !> Domain
-    class(domain_t), intent(in) :: this
-    !> Name of the registered state variable
-    character(len=*), intent(in) :: variable_name
-  end function cell_state_units
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Gets an iterator for all cells in associated domain_state_t objects
-  function cell_iterator( this )
+  !> Returns an iterator for the domain or a supported domain subset
+  function iterator( this, target_domain )
+    use musica_target,                 only : target_t
     import domain_t
     import domain_iterator_t
     !> New iterator
-    class(domain_iterator_t), pointer :: cell_iterator
+    class(domain_iterator_t), pointer :: iterator
     !> Domain
     class(domain_t), intent(in) :: this
-  end function cell_iterator
+    !> Target for the iterator
+    class(target_t), intent(in) :: target_domain
+  end function iterator
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -459,7 +362,7 @@ interface
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Gets the value of a registered property or state variable
+  !> Gets the value of a registered state property
   !!
   !! The value returned will be in the units specified when the accessor was
   !! created.
@@ -471,15 +374,15 @@ interface
     class(domain_state_t), intent(in) :: this
     !> Domain iterator
     class(domain_iterator_t), intent(in) :: iterator
-    !> Accessor for the registered property or state variable
+    !> Accessor for the registered state property
     class(domain_state_accessor_t), intent(in) :: accessor
-    !> Value of the property or state variable
+    !> Value of the property
     class(*), intent(out) :: state_value
   end subroutine state_get
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Updates the value of a registered property or state variable
+  !> Updates the value of a registered state property
   !!
   !! The units for the value passed to this function must be the same as
   !! those specified when the mutator was created.
@@ -491,11 +394,35 @@ interface
     class(domain_state_t), intent(inout) :: this
     !> Domain iterator
     class(domain_iterator_t), intent(in) :: iterator
-    !> Mutator for registered property or state variable
+    !> Mutator for registered state property
     class(domain_state_mutator_t), intent(in) :: mutator
     !> New value
     class(*), intent(in) :: state_value
   end subroutine state_update
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Returns the property modified by the mutator
+  function mutator_property( this )
+    use musica_property,               only : property_t
+    import domain_state_mutator_t
+    !> Property modified
+    class(property_t), pointer :: mutator_property
+    !> Domain state mutator
+    class(domain_state_mutator_t), intent(in) :: this
+  end function mutator_property
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Returns the property accessed by the accessor
+  function accessor_property( this )
+    use musica_property,               only : property_t
+    import domain_state_accessor_t
+    !> Property accessed
+    class(property_t), pointer :: accessor_property
+    !> Domain state accessor
+    class(domain_state_accessor_t), intent(in) :: this
+  end function accessor_property
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 end interface
@@ -525,6 +452,102 @@ contains
     is_locked = this%is_locked_
 
   end function is_locked
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Registers a domain state property
+  subroutine register_property( this, property )
+
+    use musica_assert,                 only : assert
+    use musica_property,               only : property_t
+
+    !> Domain
+    class(domain_t), intent(inout) :: this
+    !> Property to add to the domain registry
+    class(property_t), intent(in) :: property
+
+    call assert( 823250106, .not. this%is_locked_ )
+    call this%properties_%add( property )
+
+  end subroutine register_property
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Registers a domain property set
+  subroutine register_property_set( this, prefix, property_set )
+
+    use musica_assert,                 only : assert
+    use musica_property,               only : property_t, property_ptr
+    use musica_property_set,           only : property_set_t
+    use musica_string,                 only : string_t
+
+    !> Domain
+    class(domain_t), intent(inout) :: this
+    !> Prefix to attach to the property names
+    character(len=*), intent(in) :: prefix
+    !> Property set to add to the domain registry
+    class(property_set_t), intent(in) :: property_set
+
+    integer(kind=musica_ik) :: i_prop
+    class(property_t), pointer :: prop, new_prop
+    type(string_t) :: new_name, defined_by
+
+    call assert( 995312544, .not. this%is_locked_ )
+    do i_prop = 1, property_set%size( )
+      prop => property_set%get( i_prop )
+      new_name = prop%name( )
+      if( len( prefix ) .gt. 0 ) new_name = prefix//"%"//new_name
+      defined_by = prop%defined_by( )
+      new_prop => property_t( prop, defined_by%to_char( ),                    &
+                              name = new_name%to_char( ) )
+      call this%properties_%add( new_prop )
+      deallocate( new_prop )
+      deallocate( prop     )
+    end do
+
+  end subroutine register_property_set
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Returns the set of registered properties for the domain
+  function properties( this )
+
+    use musica_assert,                 only : assert
+
+    !> Registered properties
+    class(property_set_t), pointer :: properties
+    !> Domain
+    class(domain_t), intent(in) :: this
+
+    call assert( 544133630, associated( this%properties_ ) )
+    call assert( 203819822, this%is_locked_ )
+    properties => this%properties_%subset( )
+
+  end function properties
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Private constructor (should only be called by extending types)
+  subroutine private_constructor( this )
+
+    !> Domain
+    class(domain_t), intent(inout) :: this
+
+    this%properties_ => property_set_t( )
+
+  end subroutine private_constructor
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Private destructor (should only be called by extending types)
+  subroutine private_destructor( this )
+
+    !> Domain
+    class(domain_t), intent(inout) :: this
+
+    if( associated( this%properties_ ) ) deallocate( this%properties_ )
+
+  end subroutine private_destructor
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -585,6 +608,140 @@ contains
     if( associated( this%val_ ) ) deallocate( this%val_ )
 
   end subroutine domain_iterator_ptr_finalize
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Returns the name of the target
+  type(string_t) function target_cells_t_name( this ) result( my_name )
+
+    use musica_string,                 only : string_t
+
+    !> Target
+    class(target_cells_t), intent(in) :: this
+
+    my_name = "all domain cells"
+
+  end function target_cells_t_name
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Equality comparison
+  logical function target_cells_t_equals_target( a, b ) result( eq )
+
+    !> Target
+    class(target_cells_t), intent(in) :: a
+    !> Other target
+    class(target_t), intent(in) :: b
+
+    select type( b )
+    class is( target_cells_t )
+      eq = .true.
+    class default
+      eq = .false.
+    end select
+
+  end function target_cells_t_equals_target
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Returns the name of the target
+  type(string_t) function target_columns_t_name( this ) result( my_name )
+
+    use musica_string,                 only : string_t
+
+    !> Target
+    class(target_columns_t), intent(in) :: this
+
+    my_name = "all domain columns"
+
+  end function target_columns_t_name
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Equality comparison
+  logical function target_columns_t_equals_target( a, b ) result( eq )
+
+    !> Target
+    class(target_columns_t), intent(in) :: a
+    !> Other target
+    class(target_t), intent(in) :: b
+
+    select type( b )
+    class is( target_columns_t )
+      eq = .true.
+    class default
+      eq = .false.
+    end select
+
+  end function target_columns_t_equals_target
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Returns the name of the target
+  type(string_t) function target_surface_cells_t_name( this ) result( my_name )
+
+    use musica_string,                 only : string_t
+
+    !> Target
+    class(target_surface_cells_t), intent(in) :: this
+
+    my_name = "all domain cells at the surface"
+
+  end function target_surface_cells_t_name
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Equality comparison
+  logical function target_surface_cells_t_equals_target( a, b ) result( eq )
+
+    !> Target
+    class(target_surface_cells_t), intent(in) :: a
+    !> Other target
+    class(target_t), intent(in) :: b
+
+    select type( b )
+    class is( target_surface_cells_t )
+      eq = .true.
+    class default
+      eq = .false.
+    end select
+
+  end function target_surface_cells_t_equals_target
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Returns the name of the target
+  type(string_t) function target_model_top_cells_t_name( this )               &
+      result( my_name )
+
+    use musica_string,                 only : string_t
+
+    !> Target
+    class(target_model_top_cells_t), intent(in) :: this
+
+    my_name = "all domain cells at the model top"
+
+  end function target_model_top_cells_t_name
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Equality comparison
+  logical function target_model_top_cells_t_equals_target( a, b )             &
+      result( eq )
+
+    !> Target
+    class(target_model_top_cells_t), intent(in) :: a
+    !> Other target
+    class(target_t), intent(in) :: b
+
+    select type( b )
+    class is( target_model_top_cells_t )
+      eq = .true.
+    class default
+      eq = .false.
+    end select
+
+  end function target_model_top_cells_t_equals_target
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 

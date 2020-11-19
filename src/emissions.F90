@@ -63,8 +63,11 @@ contains
   !!
   function constructor( domain ) result( new_obj )
 
+    use musica_data_type,              only : kDouble
     use musica_domain,                 only : domain_t,                       &
-                                              domain_state_accessor_ptr
+                                              domain_state_accessor_ptr,      &
+                                              target_cells_t
+    use musica_property,               only : property_t
     use musica_string,                 only : string_t
 
     !> New emissions_t object
@@ -74,31 +77,37 @@ contains
 
     character(len=*), parameter :: my_name = 'emissions_t constructor'
     type(domain_state_accessor_ptr), pointer :: rates(:)
-    type(string_t), allocatable :: species_names(:)
+    type(string_t) :: species_name
+    class(property_t), pointer :: emit_prop, chem_prop
     integer(kind=musica_ik) :: i_rate
+    type(target_cells_t) :: all_cells
 
     allocate( new_obj )
 
-    rates => domain%cell_state_set_accessor( "emission_rates",                & !- state variable set name
-                                             "mol m-3 s-1",                   & !- MUSICA units
-                                             species_names,                   & !- set element names
-                                             my_name )
+    rates => domain%accessor_set( "emission_rates",                           & !- state variable set name
+                                  "mol m-3 s-1",                              & !- MUSICA units
+                                  kDouble,                                    & !- data type
+                                  all_cells,                                  & !- accessor target domain
+                                  my_name )
 
     allocate( new_obj%pairs_( size( rates ) ) )
 
     do i_rate = 1, size( rates )
       new_obj%pairs_( i_rate )%get_rate_ => rates( i_rate )%val_
       rates( i_rate )%val_ => null( )
-      new_obj%pairs_( i_rate )%get_species_ =>                                &
-          domain%cell_state_accessor( "chemical_species%"//                   & !- state variable name
-                                          species_names( i_rate )%to_char( ), &
-                                      "mol m-3",                              & !- MUSICA units
-                                      my_name )
-      new_obj%pairs_( i_rate )%set_species_ =>                                &
-          domain%cell_state_mutator(  "chemical_species%"//                   & !- state variable name
-                                          species_names( i_rate )%to_char( ), &
-                                      "mol m-3",                              & !- MUSICA units
-                                      my_name )
+      emit_prop => new_obj%pairs_( i_rate )%get_rate_%property( )
+      species_name = emit_prop%base_name( )
+      chem_prop => property_t( emit_prop,                                     &
+                               my_name,                                       &
+                               name = "chemical_species%"//                   & !- state variable name
+                                      species_name%to_char( ),                &
+                               units = "mol m-3",                             & !- MUSICA units
+                               data_type = kDouble,                           & !- data type
+                               applies_to = all_cells )                         !- target domain
+      new_obj%pairs_( i_rate )%get_species_ => domain%accessor( chem_prop )
+      new_obj%pairs_( i_rate )%set_species_ => domain%mutator(  chem_prop )
+      deallocate( emit_prop )
+      deallocate( chem_prop )
     end do
 
     deallocate( rates )

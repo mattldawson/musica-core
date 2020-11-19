@@ -92,7 +92,7 @@ contains
 
     use musica_assert,                 only : assert
     use musica_domain,                 only : domain_t, domain_iterator_t,    &
-                                              domain_state_t
+                                              domain_state_t, target_cells_t
 
     !> New model state loaded with initial conditions
     class(domain_state_t), pointer :: new_state
@@ -103,13 +103,14 @@ contains
 
     class(domain_iterator_t), pointer :: iter
     integer(kind=musica_ik) :: i_file, i_value
+    type(target_cells_t) :: all_cells
 
     new_state => domain%new_state( )
     do i_file = 1, size( this%files_ )
       call assert( 765999643, associated( this%files_( i_file )%val_ ) )
       call this%files_( i_file )%val_%update_state( domain, new_state )
     end do
-    iter => domain%cell_iterator( )
+    iter => domain%iterator( all_cells )
     do i_value = 1, size( this%initial_values_ )
       associate( val => this%initial_values_( i_value ) )
       call iter%reset( )
@@ -190,7 +191,7 @@ contains
     init_cond_file => input_output_processor_t( file_opts )
     do i_var = 1, size( this%variable_names_ )
       associate( var_name => this%variable_names_( i_var ) )
-      units = domain%cell_state_units( var_name%to_char( ) )
+      units = domain%units( var_name%to_char( ) )
       call init_cond_file%register_output_variable( domain,                   & !- model domain
                                                     var_name%to_char( ),      & !- variable name
                                                     units%to_char( ) )          !- units
@@ -333,8 +334,10 @@ contains
     use musica_array,                  only : add_to_array
     use musica_assert,                 only : assert
     use musica_config,                 only : config_t
-    use musica_domain,                 only : domain_t
+    use musica_data_type,              only : kDouble
+    use musica_domain,                 only : domain_t, target_cells_t
     use musica_iterator,               only : iterator_t
+    use musica_property,               only : property_t
 
     !> Initial conditions
     class(initial_conditions_t), intent(inout) :: this
@@ -351,6 +354,8 @@ contains
     real(kind=musica_dk) :: conc
     class(iterator_t), pointer :: species_iter
     integer(kind=musica_ik) :: i_value, n_values
+    class(property_t), pointer :: prop
+    type(target_cells_t) :: all_cells
 
     call assert( 142287599, allocated( variable_names ) )
     species_iter => config%get_iterator( )
@@ -366,9 +371,13 @@ contains
       species_name = "chemical_species%"//config%key( species_iter )
       call config%get( species_iter, subset, my_name )
       call subset%get( "initial value", "mol m-3", conc, my_name )
-      this%initial_values_( i_value )%mutator_ =>                             &
-          domain%cell_state_mutator( species_name%to_char( ), "mol m-3",      &
-                                     my_name )
+      prop => property_t( my_name,                                            &
+                          name = species_name%to_char( ),                     & !- state variable name
+                          units = "mol m-3",                                  & !- MUSICA units
+                          data_type = kDouble,                                & !- data type
+                          applies_to = all_cells )                              !- target domain
+      this%initial_values_( i_value )%mutator_ => domain%mutator( prop )
+      deallocate( prop )
       this%initial_values_( i_value )%value_ = conc
       call add_to_array( variable_names, species_name )
     end do
@@ -392,8 +401,10 @@ contains
     use musica_array,                  only : add_to_array
     use musica_assert,                 only : assert
     use musica_config,                 only : config_t
-    use musica_domain,                 only : domain_t
+    use musica_data_type,              only : kDouble
+    use musica_domain,                 only : domain_t, target_cells_t
     use musica_iterator,               only : iterator_t
+    use musica_property,               only : property_t
 
     !> Initial conditions
     class(initial_conditions_t), intent(inout) :: this
@@ -411,6 +422,8 @@ contains
     real(musica_dk) :: property_value
     class(iterator_t), pointer :: property_iter
     integer(kind=musica_ik) :: i_value, n_values
+    type(target_cells_t) :: all_cells
+    class(property_t), pointer :: prop
 
     call assert( 258704135, allocated( variable_names ) )
     property_iter => config%get_iterator( )
@@ -424,15 +437,19 @@ contains
     do while( property_iter%next( ) )
       i_value = i_value + 1
       property_name = config%key( property_iter )
-      units         = domain%cell_state_units( property_name%to_char( ) )
+      units         = domain%units( property_name%to_char( ) )
       call config%get( property_iter, subset, my_name )
       call subset%get( "initial value",  units%to_char( ), property_value,    &
                       my_name )
-      this%initial_values_( i_value )%mutator_ =>                             &
-          domain%cell_state_mutator( property_name%to_char( ),                &
-                                     units%to_char( ), my_name )
+      prop => property_t( my_name,                                            &
+                          name = property_name%to_char( ),                    & !- state variable name
+                          units = units%to_char( ),                           & !- MUSICA units
+                          data_type = kDouble,                                & !- data type
+                          applies_to = all_cells )                              !- target domain
+      this%initial_values_( i_value )%mutator_ => domain%mutator( prop )
       this%initial_values_( i_value )%value_ = property_value
       call add_to_array( variable_names, property_name )
+      deallocate( prop )
     end do
     call assert( 745759824, i_value .eq. size( this%initial_values_ ) )
     do i_value = 1, size( this%initial_values_ )
@@ -454,8 +471,10 @@ contains
     use musica_array,                  only : add_to_array
     use musica_assert,                 only : assert
     use musica_config,                 only : config_t
-    use musica_domain,                 only : domain_t
+    use musica_data_type,              only : kDouble
+    use musica_domain,                 only : domain_t, target_cells_t
     use musica_iterator,               only : iterator_t
+    use musica_property,               only : property_t
 
     !> Initial conditions
     class(initial_conditions_t), intent(inout) :: this
@@ -473,6 +492,8 @@ contains
     real(musica_dk) :: rate_constant
     class(iterator_t), pointer :: photo_iter
     integer(kind=musica_ik) :: i_value, n_values
+    class(property_t), pointer :: prop
+    type(target_cells_t) :: all_cells
 
     call assert( 122874379, allocated( variable_names ) )
     photo_iter => config%get_iterator( )
@@ -486,15 +507,19 @@ contains
     do while( photo_iter%next( ) )
       i_value = i_value + 1
       photo_name = "photolysis_rate_constants%"//config%key( photo_iter )
-      units      = domain%cell_state_units( photo_name%to_char( ) )
+      units      = domain%units( photo_name%to_char( ) )
       call config%get( photo_iter, subset, my_name )
       call subset%get( "initial value", units%to_char( ), rate_constant,      &
                        my_name )
-      this%initial_values_( i_value )%mutator_ =>                             &
-          domain%cell_state_mutator( photo_name%to_char( ), units%to_char( ), &
-                                     my_name )
+      prop => property_t( my_name,                                            &
+                          name = photo_name%to_char( ),                       & !- state variable name
+                          units = units%to_char( ),                           & !- MUSICA units
+                          data_type = kDouble,                                & !- data type
+                          applies_to = all_cells )                              !- target domain
+      this%initial_values_( i_value )%mutator_ => domain%mutator( prop )
       this%initial_values_( i_value )%value_ = rate_constant
       call add_to_array( variable_names, photo_name )
+      deallocate( prop )
     end do
     call assert( 655047356, i_value .eq. size( this%initial_values_ ) )
     do i_value = 1, size( this%initial_values_ )
