@@ -61,10 +61,18 @@ interface
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   !> Resets the iterator to the beginning of the collection
-  subroutine reset( this )
+  !!
+  !! For iterators that target nested sets of elements (e.g., cells within a
+  !! column), the reset function can require a higher-level iterator whose
+  !! current target will be used to identify the nested set of elements to
+  !! iterate over.
+  !!
+  subroutine reset( this, parent )
     import iterator_t
     !> Iterator
     class(iterator_t), intent(inout) :: this
+    !> Iterator for parent model element
+    class(iterator_t), intent(in), optional :: parent
   end subroutine reset
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

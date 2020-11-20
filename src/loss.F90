@@ -118,8 +118,8 @@ contains
   subroutine do_loss( this, domain_state, cell, time_step__s )
 
     use musica_assert,                 only : assert
-    use musica_domain,                 only : domain_state_t,                 &
-                                              domain_iterator_t
+    use musica_domain,                 only : domain_state_t
+    use musica_domain_iterator,        only : domain_iterator_t
 
     !> Loss handler
     class(loss_t), intent(in) :: this

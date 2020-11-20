@@ -12,16 +12,15 @@ module musica_domain
                                               domain_state_accessor_ptr
   use musica_domain_state_mutator,     only : domain_state_mutator_t,         &
                                               domain_state_mutator_ptr
-  use musica_iterator,                 only : iterator_t
   use musica_property_set,             only : property_set_t
   use musica_target,                   only : target_t
 
   implicit none
   private
 
-  public :: domain_t, domain_state_t, domain_iterator_t,                      &
-            domain_ptr, domain_state_ptr, domain_iterator_ptr, target_cells_t,&
-            target_columns_t, target_surface_cells_t, target_model_top_cells_t
+  public :: domain_t, domain_state_t, domain_ptr, domain_state_ptr,           &
+            target_cells_t, target_columns_t, target_surface_cells_t,         &
+            target_model_top_cells_t
 
   !> A model domain of abstract structure
   !!
@@ -106,10 +105,6 @@ module musica_domain
     procedure(state_update), deferred :: update
   end type domain_state_t
 
-  !> Domain iterator
-  type, abstract, extends(iterator_t) :: domain_iterator_t
-  end type domain_iterator_t
-
   !> Pointer types for building arrays of abstract objects
   !! @{
 
@@ -126,13 +121,6 @@ module musica_domain
   contains
     final :: domain_state_ptr_finalize
   end type domain_state_ptr
-
-  !> Iterator pointer
-  type domain_iterator_ptr
-    class(domain_iterator_t), pointer :: val_ => null( )
-  contains
-    final :: domain_iterator_ptr_finalize
-  end type domain_iterator_ptr
 
   !> @}
 
@@ -312,9 +300,9 @@ interface
 
   !> Returns an iterator for the domain or a supported domain subset
   function iterator( this, target_domain )
+    use musica_domain_iterator,        only : domain_iterator_t
     use musica_target,                 only : target_t
     import domain_t
-    import domain_iterator_t
     !> New iterator
     class(domain_iterator_t), pointer :: iterator
     !> Domain
@@ -341,8 +329,8 @@ interface
   !! The value returned will be in the units specified when the accessor was
   !! created.
   subroutine state_get( this, iterator, accessor, state_value )
+    use musica_domain_iterator,        only : domain_iterator_t
     use musica_domain_state_accessor,  only : domain_state_accessor_t
-    import domain_iterator_t
     import domain_state_t
     !> Domain state
     class(domain_state_t), intent(in) :: this
@@ -361,9 +349,9 @@ interface
   !! The units for the value passed to this function must be the same as
   !! those specified when the mutator was created.
   subroutine state_update( this, iterator, mutator, state_value )
+    use musica_domain_iterator,        only : domain_iterator_t
     use musica_domain_state_mutator,   only : domain_state_mutator_t
     import domain_state_t
-    import domain_iterator_t
     !> Domain state
     class(domain_state_t), intent(inout) :: this
     !> Domain iterator
@@ -522,18 +510,6 @@ contains
     if( associated( this%val_ ) ) deallocate( this%val_ )
 
   end subroutine domain_state_ptr_finalize
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Finalize pointer
-  subroutine domain_iterator_ptr_finalize( this )
-
-    !> Domain pointer
-    type(domain_iterator_ptr), intent(inout) :: this
-
-    if( associated( this%val_ ) ) deallocate( this%val_ )
-
-  end subroutine domain_iterator_ptr_finalize
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 

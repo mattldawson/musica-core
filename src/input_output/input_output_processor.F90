@@ -11,7 +11,7 @@ module musica_input_output_processor
   use musica_file,                     only : file_t
   use musica_file_dimension,           only : file_dimension_t
   use musica_file_updater,             only : file_updater_ptr
-  use musica_domain,                   only : domain_iterator_t
+  use musica_domain_iterator,          only : domain_iterator_t
 
   implicit none
   private

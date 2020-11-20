@@ -204,8 +204,8 @@ contains
       iterator ) result( musica_value )
 
     use musica_assert,                 only : assert
-    use musica_domain,                 only : domain_state_t,                 &
-                                              domain_iterator_t
+    use musica_domain,                 only : domain_state_t
+    use musica_domain_iterator,        only : domain_iterator_t
 
     !> Paired variable
     class(file_paired_variable_t), intent(in) :: this
@@ -225,8 +225,8 @@ contains
   subroutine set_musica_value( this, domain_state, iterator, value )
 
     use musica_assert,                 only : assert
-    use musica_domain,                 only : domain_state_t,                 &
-                                              domain_iterator_t
+    use musica_domain,                 only : domain_state_t
+    use musica_domain_iterator,        only : domain_iterator_t
 
     !> Paired variable
     class(file_paired_variable_t), intent(in) :: this

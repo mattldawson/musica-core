@@ -91,8 +91,9 @@ contains
   function get_state( this, domain ) result( new_state )
 
     use musica_assert,                 only : assert
-    use musica_domain,                 only : domain_t, domain_iterator_t,    &
-                                              domain_state_t, target_cells_t
+    use musica_domain,                 only : domain_t, domain_state_t,       &
+                                              target_cells_t
+    use musica_domain_iterator,        only : domain_iterator_t
 
     !> New model state loaded with initial conditions
     class(domain_state_t), pointer :: new_state
@@ -538,8 +539,8 @@ contains
   subroutine initial_value_set_state( this, iterator, state )
 
     use musica_assert,                 only : assert
-    use musica_domain,                 only : domain_iterator_t,              &
-                                              domain_state_t
+    use musica_domain,                 only : domain_state_t
+    use musica_domain_iterator,        only : domain_iterator_t
 
     !> Initial value
     class(initial_value_t), intent(in) :: this

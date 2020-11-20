@@ -1443,10 +1443,12 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   !> Resets the iterator
-  subroutine iterator_reset( this )
+  subroutine iterator_reset( this, parent )
 
     !> Iterator
     class(config_iterator_t), intent(inout) :: this
+    !> Iterator for parent model element
+    class(iterator_t), intent(in), optional :: parent
 
     this%id_ = 0
 

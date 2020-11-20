@@ -9,8 +9,8 @@ module musica_domain_cell
 
   use musica_constants,                only : musica_dk, musica_ik,           &
                                               musica_lk, musica_rk
-  use musica_domain,                   only : domain_t, domain_state_t,       &
-                                              domain_iterator_t
+  use musica_domain,                   only : domain_t, domain_state_t
+  use musica_domain_iterator,          only : domain_iterator_t
   use musica_domain_state_accessor,    only : domain_state_accessor_t
   use musica_domain_state_mutator,     only : domain_state_mutator_t
   use musica_property,                 only : property_ptr
@@ -581,7 +581,6 @@ contains
 
     use musica_assert,                 only : die, die_msg
     use musica_domain,                 only : target_cells_t
-    use musica_iterator,               only : iterator_t
     use musica_target,                 only : target_t
 
     !> New iterator
@@ -872,10 +871,14 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   !> Resets the iterator
-  subroutine domain_cell_iterator_reset( this )
+  subroutine domain_cell_iterator_reset( this, parent )
+
+    use musica_iterator,               only : iterator_t
 
     !> Iterator
     class(cell_iterator_t), intent(inout) :: this
+    !> Iterator for parent model element
+    class(iterator_t), intent(in), optional :: parent
 
     this%current_cell_ = 0
 
