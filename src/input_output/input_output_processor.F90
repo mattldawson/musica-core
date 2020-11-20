@@ -256,7 +256,8 @@ contains
   subroutine update_state( this, domain, domain_state, time__s, tethered_only )
 
     use musica_assert,                 only : assert
-    use musica_domain,                 only : domain_t, domain_state_t
+    use musica_domain,                 only : domain_t
+    use musica_domain_state,           only : domain_state_t
     use musica_domain_target_cells,    only : domain_target_cells_t
 
     !> Input/output
@@ -354,7 +355,8 @@ contains
   subroutine output( this, time__s, domain, domain_state )
 
     use musica_assert,                 only : die_msg
-    use musica_domain,                 only : domain_t, domain_state_t
+    use musica_domain,                 only : domain_t
+    use musica_domain_state,           only : domain_state_t
     use musica_domain_target_cells,    only : domain_target_cells_t
 
     !> Input/output

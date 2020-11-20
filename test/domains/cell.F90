@@ -25,7 +25,8 @@ contains
                                               rk => musica_rk
     use musica_data_type,              only : kBoolean, kDouble, kFloat,      &
                                               kInteger
-    use musica_domain,                 only : domain_t, domain_state_t
+    use musica_domain,                 only : domain_t
+    use musica_domain_state,           only : domain_state_t
     use musica_domain_target_cells,    only : domain_target_cells_t
     use musica_domain_iterator,        only : domain_iterator_t
     use musica_domain_state_mutator,   only : domain_state_mutator_t,         &

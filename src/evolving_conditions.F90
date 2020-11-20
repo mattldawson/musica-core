@@ -123,7 +123,8 @@ contains
   !> Update the model state for a given time
   subroutine update_state( this, domain, state, time__s )
 
-    use musica_domain,                 only : domain_t, domain_state_t
+    use musica_domain,                 only : domain_t
+    use musica_domain_state,           only : domain_state_t
 
     !> Evolving conditions
     class(evolving_conditions_t), intent(inout) :: this
@@ -150,7 +151,8 @@ contains
 
     use musica_assert,                 only : assert
     use musica_config,                 only : config_t
-    use musica_domain,                 only : domain_t, domain_state_t
+    use musica_domain,                 only : domain_t
+    use musica_domain_state,           only : domain_state_t
     use musica_input_output_processor, only : input_output_processor_t
     use musica_string,                 only : string_t, to_char
 

@@ -91,7 +91,8 @@ contains
   function get_state( this, domain ) result( new_state )
 
     use musica_assert,                 only : assert
-    use musica_domain,                 only : domain_t, domain_state_t
+    use musica_domain,                 only : domain_t
+    use musica_domain_state,           only : domain_state_t
     use musica_domain_target_cells,    only : domain_target_cells_t
     use musica_domain_iterator,        only : domain_iterator_t
 
@@ -130,7 +131,8 @@ contains
   subroutine update_state( this, domain, state )
 
     use musica_assert,                 only : assert
-    use musica_domain,                 only : domain_t, domain_state_t
+    use musica_domain,                 only : domain_t
+    use musica_domain_state,           only : domain_state_t
 
     !> Initial conditions
     class(initial_conditions_t), intent(in) :: this
@@ -155,7 +157,8 @@ contains
   subroutine preprocess_input( this, config, domain, output_path )
 
     use musica_config,                 only : config_t
-    use musica_domain,                 only : domain_t, domain_state_t
+    use musica_domain,                 only : domain_t
+    use musica_domain_state,           only : domain_state_t
     use musica_input_output_processor, only : input_output_processor_t
 
     !> Initial conditions
@@ -542,7 +545,7 @@ contains
   subroutine initial_value_set_state( this, iterator, state )
 
     use musica_assert,                 only : assert
-    use musica_domain,                 only : domain_state_t
+    use musica_domain_state,           only : domain_state_t
     use musica_domain_iterator,        only : domain_iterator_t
 
     !> Initial value

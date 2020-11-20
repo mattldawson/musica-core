@@ -9,7 +9,8 @@ module musica_domain_cell
 
   use musica_constants,                only : musica_dk, musica_ik,           &
                                               musica_lk, musica_rk
-  use musica_domain,                   only : domain_t, domain_state_t
+  use musica_domain,                   only : domain_t
+  use musica_domain_state,             only : domain_state_t
   use musica_domain_iterator,          only : domain_iterator_t
   use musica_domain_state_accessor,    only : domain_state_accessor_t
   use musica_domain_state_mutator,     only : domain_state_mutator_t

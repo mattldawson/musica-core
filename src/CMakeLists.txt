@@ -5,6 +5,7 @@ set(MUSICA_SRC config.F90
                domain.F90
                domain_factory.F90
                domain_iterator.F90
+               domain_state.F90
                domain_state_accessor.F90
                domain_state_mutator.F90
                domain_target_cells.F90

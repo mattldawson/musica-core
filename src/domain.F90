@@ -8,16 +8,12 @@
 module musica_domain
 
   use musica_constants,                only : musica_dk, musica_ik
-  use musica_domain_state_accessor,    only : domain_state_accessor_t,        &
-                                              domain_state_accessor_ptr
-  use musica_domain_state_mutator,     only : domain_state_mutator_t,         &
-                                              domain_state_mutator_ptr
   use musica_property_set,             only : property_set_t
 
   implicit none
   private
 
-  public :: domain_t, domain_state_t, domain_ptr, domain_state_ptr
+  public :: domain_t, domain_ptr
 
   !> A model domain of abstract structure
   !!
@@ -93,35 +89,15 @@ module musica_domain
     procedure :: private_destructor
   end type domain_t
 
-  !> Abstract domain state
-  type, abstract :: domain_state_t
-  contains
-    !> Gets the value of a state property
-    procedure(state_get), deferred :: get
-    !> Updates the value of a state property
-    procedure(state_update), deferred :: update
-  end type domain_state_t
-
-  !> Pointer types for building arrays of abstract objects
-  !! @{
-
   !> Domain pointer
   type domain_ptr
     class(domain_t), pointer :: val_ => null( )
   contains
-    final :: domain_ptr_finalize
+    final :: finalize
   end type domain_ptr
 
-  !> State pointer
-  type domain_state_ptr
-    class(domain_state_t), pointer :: val_ => null( )
-  contains
-    final :: domain_state_ptr_finalize
-  end type domain_state_ptr
-
-  !> @}
-
 interface
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   !> Returns the domain type as a string
@@ -138,8 +114,8 @@ interface
 
   !> Creates a new domain state object
   function new_state( this )
+    use musica_domain_state,           only : domain_state_t
     import domain_t
-    import domain_state_t
     !> New domain state
     class(domain_state_t), pointer :: new_state
     !> Domain
@@ -288,45 +264,6 @@ interface
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Gets the value of a registered state property
-  !!
-  !! The value returned will be in the units specified when the accessor was
-  !! created.
-  subroutine state_get( this, iterator, accessor, state_value )
-    use musica_domain_iterator,        only : domain_iterator_t
-    use musica_domain_state_accessor,  only : domain_state_accessor_t
-    import domain_state_t
-    !> Domain state
-    class(domain_state_t), intent(in) :: this
-    !> Domain iterator
-    class(domain_iterator_t), intent(in) :: iterator
-    !> Accessor for the registered state property
-    class(domain_state_accessor_t), intent(in) :: accessor
-    !> Value of the property
-    class(*), intent(out) :: state_value
-  end subroutine state_get
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Updates the value of a registered state property
-  !!
-  !! The units for the value passed to this function must be the same as
-  !! those specified when the mutator was created.
-  subroutine state_update( this, iterator, mutator, state_value )
-    use musica_domain_iterator,        only : domain_iterator_t
-    use musica_domain_state_mutator,   only : domain_state_mutator_t
-    import domain_state_t
-    !> Domain state
-    class(domain_state_t), intent(inout) :: this
-    !> Domain iterator
-    class(domain_iterator_t), intent(in) :: iterator
-    !> Mutator for registered state property
-    class(domain_state_mutator_t), intent(in) :: mutator
-    !> New value
-    class(*), intent(in) :: state_value
-  end subroutine state_update
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 end interface
 
 contains
@@ -453,27 +390,15 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Finalize pointer
-  subroutine domain_ptr_finalize( this )
+  !> Finalizes a domain pointer
+  subroutine finalize( this )
 
     !> Domain pointer
     type(domain_ptr), intent(inout) :: this
 
     if( associated( this%val_ ) ) deallocate( this%val_ )
 
-  end subroutine domain_ptr_finalize
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Finalize pointer
-  subroutine domain_state_ptr_finalize( this )
-
-    !> Domain pointer
-    type(domain_state_ptr), intent(inout) :: this
-
-    if( associated( this%val_ ) ) deallocate( this%val_ )
-
-  end subroutine domain_state_ptr_finalize
+  end subroutine finalize
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
