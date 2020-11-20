@@ -64,8 +64,8 @@ contains
   function constructor( domain ) result( new_obj )
 
     use musica_data_type,              only : kDouble
-    use musica_domain,                 only : domain_t,                       &
-                                              target_cells_t
+    use musica_domain,                 only : domain_t
+    use musica_domain_target_cells,    only : domain_target_cells_t
     use musica_domain_state_accessor,  only : domain_state_accessor_ptr
     use musica_property,               only : property_t
     use musica_string,                 only : string_t
@@ -80,7 +80,7 @@ contains
     type(string_t) :: species_name
     integer(kind=musica_ik) :: i_rate
     class(property_t), pointer :: loss_prop, chem_prop
-    type(target_cells_t) :: all_cells
+    type(domain_target_cells_t) :: all_cells
 
     allocate( new_obj )
 

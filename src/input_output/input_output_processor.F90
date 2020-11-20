@@ -256,8 +256,8 @@ contains
   subroutine update_state( this, domain, domain_state, time__s, tethered_only )
 
     use musica_assert,                 only : assert
-    use musica_domain,                 only : domain_t, domain_state_t,       &
-                                              target_cells_t
+    use musica_domain,                 only : domain_t, domain_state_t
+    use musica_domain_target_cells,    only : domain_target_cells_t
 
     !> Input/output
     class(input_output_processor_t), intent(inout) :: this
@@ -273,7 +273,7 @@ contains
 
     integer(kind=musica_ik) :: i_data, i_updater
     logical :: found, l_tethered_only
-    type(target_cells_t) :: all_cells
+    type(domain_target_cells_t) :: all_cells
 
     call assert( 967287335, associated( this%file_ ) )
     call assert( 682224647, this%file_%is_input( ) )
@@ -354,8 +354,8 @@ contains
   subroutine output( this, time__s, domain, domain_state )
 
     use musica_assert,                 only : die_msg
-    use musica_domain,                 only : domain_t, domain_state_t,       &
-                                              target_cells_t
+    use musica_domain,                 only : domain_t, domain_state_t
+    use musica_domain_target_cells,    only : domain_target_cells_t
 
     !> Input/output
     class(input_output_processor_t), intent(inout) :: this
@@ -367,7 +367,7 @@ contains
     class(domain_state_t), intent(in) :: domain_state
 
     integer(kind=musica_ik) :: i_updater
-    type(target_cells_t) :: all_cells
+    type(domain_target_cells_t) :: all_cells
 
     if( .not. associated( this%iterator_ ) ) then
       this%iterator_ => domain%iterator( all_cells )

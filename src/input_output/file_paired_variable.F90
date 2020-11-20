@@ -84,7 +84,8 @@ contains
 
     use musica_assert,                 only : die
     use musica_data_type,              only : kDouble
-    use musica_domain,                 only : domain_t, target_cells_t
+    use musica_domain,                 only : domain_t
+    use musica_domain_target_cells,    only : domain_target_cells_t
     use musica_file,                   only : file_t
     use musica_file_variable,          only : file_variable_t
     use musica_property,               only : property_t
@@ -103,7 +104,7 @@ contains
     character(len=*), parameter :: my_name = "File updater pair constructor"
     type(string_t) :: std_units, var_name
     class(property_t), pointer :: prop
-    type(target_cells_t) :: all_cells
+    type(domain_target_cells_t) :: all_cells
 
     allocate( new_obj )
     allocate( new_obj%variable_, source = variable )
@@ -323,7 +324,8 @@ contains
   logical function do_match( domain, variable )
 
     use musica_data_type,              only : kDouble
-    use musica_domain,                 only : domain_t, target_cells_t
+    use musica_domain,                 only : domain_t
+    use musica_domain_target_cells,    only : domain_target_cells_t
     use musica_property,               only : property_t
 
     !> MUSICA domain
@@ -334,7 +336,7 @@ contains
     character(len=*), parameter :: my_name = "File variable matcher"
     type(string_t) :: musica_name, musica_units
     class(property_t), pointer :: prop
-    type(target_cells_t) :: all_cells
+    type(domain_target_cells_t) :: all_cells
 
     musica_name = variable%musica_name( )
 

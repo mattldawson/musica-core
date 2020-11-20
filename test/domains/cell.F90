@@ -25,8 +25,8 @@ contains
                                               rk => musica_rk
     use musica_data_type,              only : kBoolean, kDouble, kFloat,      &
                                               kInteger
-    use musica_domain,                 only : domain_t, domain_state_t,       &
-                                              target_cells_t
+    use musica_domain,                 only : domain_t, domain_state_t
+    use musica_domain_target_cells,    only : domain_target_cells_t
     use musica_domain_iterator,        only : domain_iterator_t
     use musica_domain_state_mutator,   only : domain_state_mutator_t,         &
                                               domain_state_mutator_ptr
@@ -44,7 +44,7 @@ contains
     type(property_ptr) :: prop_da, prop_db, prop_ba, prop_bb
     type(property_ptr) :: prop_base, prop_temp
     type(property_set_t), pointer :: prop_set
-    type(target_cells_t) :: all_cells
+    type(domain_target_cells_t) :: all_cells
     type(domain_state_mutator_ptr) :: mut_ia, mut_ib, mut_fa, mut_fb
     type(domain_state_mutator_ptr) :: mut_da, mut_db, mut_ba, mut_bb
     type(domain_state_mutator_ptr) :: mut_ia2, mut_fa2, mut_da2, mut_ba2

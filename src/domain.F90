@@ -13,14 +13,11 @@ module musica_domain
   use musica_domain_state_mutator,     only : domain_state_mutator_t,         &
                                               domain_state_mutator_ptr
   use musica_property_set,             only : property_set_t
-  use musica_target,                   only : target_t
 
   implicit none
   private
 
-  public :: domain_t, domain_state_t, domain_ptr, domain_state_ptr,           &
-            target_cells_t, target_columns_t, target_surface_cells_t,         &
-            target_model_top_cells_t
+  public :: domain_t, domain_state_t, domain_ptr, domain_state_ptr
 
   !> A model domain of abstract structure
   !!
@@ -123,39 +120,6 @@ module musica_domain
   end type domain_state_ptr
 
   !> @}
-
-  !> Potential sub-domain targets for state properties and iterators
-  !! @{
-
-  !> All cells
-  type, extends(target_t) :: target_cells_t
-  contains
-    procedure :: name => target_cells_t_name
-    procedure :: equals_target => target_cells_t_equals_target
-  end type target_cells_t
-
-  !> All columns
-  type, extends(target_t) :: target_columns_t
-  contains
-    procedure :: name => target_columns_t_name
-    procedure :: equals_target => target_columns_t_equals_target
-  end type target_columns_t
-
-  !> All surface cells
-  type, extends(target_t) :: target_surface_cells_t
-  contains
-    procedure :: name => target_surface_cells_t_name
-    procedure :: equals_target => target_surface_cells_t_equals_target
-  end type target_surface_cells_t
-
-  !> All topmost model cells
-  type, extends(target_t) :: target_model_top_cells_t
-  contains
-    procedure :: name => target_model_top_cells_t_name
-    procedure :: equals_target => target_model_top_cells_t_equals_target
-  end type target_model_top_cells_t
-
-  !! @}
 
 interface
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -510,140 +474,6 @@ contains
     if( associated( this%val_ ) ) deallocate( this%val_ )
 
   end subroutine domain_state_ptr_finalize
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Returns the name of the target
-  type(string_t) function target_cells_t_name( this ) result( my_name )
-
-    use musica_string,                 only : string_t
-
-    !> Target
-    class(target_cells_t), intent(in) :: this
-
-    my_name = "all domain cells"
-
-  end function target_cells_t_name
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Equality comparison
-  logical function target_cells_t_equals_target( a, b ) result( eq )
-
-    !> Target
-    class(target_cells_t), intent(in) :: a
-    !> Other target
-    class(target_t), intent(in) :: b
-
-    select type( b )
-    class is( target_cells_t )
-      eq = .true.
-    class default
-      eq = .false.
-    end select
-
-  end function target_cells_t_equals_target
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Returns the name of the target
-  type(string_t) function target_columns_t_name( this ) result( my_name )
-
-    use musica_string,                 only : string_t
-
-    !> Target
-    class(target_columns_t), intent(in) :: this
-
-    my_name = "all domain columns"
-
-  end function target_columns_t_name
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Equality comparison
-  logical function target_columns_t_equals_target( a, b ) result( eq )
-
-    !> Target
-    class(target_columns_t), intent(in) :: a
-    !> Other target
-    class(target_t), intent(in) :: b
-
-    select type( b )
-    class is( target_columns_t )
-      eq = .true.
-    class default
-      eq = .false.
-    end select
-
-  end function target_columns_t_equals_target
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Returns the name of the target
-  type(string_t) function target_surface_cells_t_name( this ) result( my_name )
-
-    use musica_string,                 only : string_t
-
-    !> Target
-    class(target_surface_cells_t), intent(in) :: this
-
-    my_name = "all domain cells at the surface"
-
-  end function target_surface_cells_t_name
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Equality comparison
-  logical function target_surface_cells_t_equals_target( a, b ) result( eq )
-
-    !> Target
-    class(target_surface_cells_t), intent(in) :: a
-    !> Other target
-    class(target_t), intent(in) :: b
-
-    select type( b )
-    class is( target_surface_cells_t )
-      eq = .true.
-    class default
-      eq = .false.
-    end select
-
-  end function target_surface_cells_t_equals_target
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Returns the name of the target
-  type(string_t) function target_model_top_cells_t_name( this )               &
-      result( my_name )
-
-    use musica_string,                 only : string_t
-
-    !> Target
-    class(target_model_top_cells_t), intent(in) :: this
-
-    my_name = "all domain cells at the model top"
-
-  end function target_model_top_cells_t_name
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Equality comparison
-  logical function target_model_top_cells_t_equals_target( a, b )             &
-      result( eq )
-
-    !> Target
-    class(target_model_top_cells_t), intent(in) :: a
-    !> Other target
-    class(target_t), intent(in) :: b
-
-    select type( b )
-    class is( target_model_top_cells_t )
-      eq = .true.
-    class default
-      eq = .false.
-    end select
-
-  end function target_model_top_cells_t_equals_target
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 

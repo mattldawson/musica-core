@@ -7,6 +7,10 @@ set(MUSICA_SRC config.F90
                domain_iterator.F90
                domain_state_accessor.F90
                domain_state_mutator.F90
+               domain_target_cells.F90
+               domain_target_columns.F90
+               domain_target_model_top_cells.F90
+               domain_target_surface_cells.F90
                domains/cell.F90
                emissions.F90
                evolving_conditions.F90

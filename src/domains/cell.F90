@@ -273,7 +273,7 @@ contains
     use musica_assert,                 only : die_msg, die
     use musica_data_type,              only : data_type_t, kBoolean, kDouble, &
                                               kFloat, kInteger
-    use musica_domain,                 only : target_cells_t
+    use musica_domain_target_cells,    only : domain_target_cells_t
     use musica_property,               only : property_t
     use musica_target,                 only : target_t
 
@@ -301,7 +301,7 @@ contains
     mutator_target => new_pair%property_%val_%applies_to( )
     data_type      =  new_pair%property_%val_%data_type( )
     select type( mutator_target )
-    class is( target_cells_t )
+    class is( domain_target_cells_t )
       if( data_type .eq. kInteger ) then
         allocate( mutator_integer_t :: new_mutator )
       else if( data_type .eq. kFloat ) then
@@ -402,7 +402,7 @@ contains
     use musica_assert,                 only : die_msg, die
     use musica_data_type,              only : data_type_t, kBoolean, kDouble,  &
                                               kFloat, kInteger
-    use musica_domain,                 only : target_cells_t
+    use musica_domain_target_cells,    only : domain_target_cells_t
     use musica_property,               only : property_t
     use musica_target,                 only : target_t
 
@@ -430,7 +430,7 @@ contains
     accessor_target => new_pair%property_%val_%applies_to( )
     data_type      =  new_pair%property_%val_%data_type( )
     select type( accessor_target )
-    class is( target_cells_t )
+    class is( domain_target_cells_t )
       if( data_type .eq. kInteger ) then
         allocate( accessor_integer_t :: new_accessor )
       else if( data_type .eq. kFloat ) then
@@ -580,7 +580,7 @@ contains
   function iterator( this, target_domain )
 
     use musica_assert,                 only : die, die_msg
-    use musica_domain,                 only : target_cells_t
+    use musica_domain_target_cells,    only : domain_target_cells_t
     use musica_target,                 only : target_t
 
     !> New iterator
@@ -591,7 +591,7 @@ contains
     class(target_t), intent(in) :: target_domain
 
     select type( target_domain )
-    class is( target_cells_t )
+    class is( domain_target_cells_t )
       allocate( cell_iterator_t :: iterator )
       select type( iterator )
       class is( cell_iterator_t )

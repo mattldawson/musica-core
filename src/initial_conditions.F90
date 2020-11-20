@@ -91,8 +91,8 @@ contains
   function get_state( this, domain ) result( new_state )
 
     use musica_assert,                 only : assert
-    use musica_domain,                 only : domain_t, domain_state_t,       &
-                                              target_cells_t
+    use musica_domain,                 only : domain_t, domain_state_t
+    use musica_domain_target_cells,    only : domain_target_cells_t
     use musica_domain_iterator,        only : domain_iterator_t
 
     !> New model state loaded with initial conditions
@@ -104,7 +104,7 @@ contains
 
     class(domain_iterator_t), pointer :: iter
     integer(kind=musica_ik) :: i_file, i_value
-    type(target_cells_t) :: all_cells
+    type(domain_target_cells_t) :: all_cells
 
     new_state => domain%new_state( )
     do i_file = 1, size( this%files_ )
@@ -336,7 +336,8 @@ contains
     use musica_assert,                 only : assert
     use musica_config,                 only : config_t
     use musica_data_type,              only : kDouble
-    use musica_domain,                 only : domain_t, target_cells_t
+    use musica_domain,                 only : domain_t
+    use musica_domain_target_cells,    only : domain_target_cells_t
     use musica_iterator,               only : iterator_t
     use musica_property,               only : property_t
 
@@ -356,7 +357,7 @@ contains
     class(iterator_t), pointer :: species_iter
     integer(kind=musica_ik) :: i_value, n_values
     class(property_t), pointer :: prop
-    type(target_cells_t) :: all_cells
+    type(domain_target_cells_t) :: all_cells
 
     call assert( 142287599, allocated( variable_names ) )
     species_iter => config%get_iterator( )
@@ -403,7 +404,8 @@ contains
     use musica_assert,                 only : assert
     use musica_config,                 only : config_t
     use musica_data_type,              only : kDouble
-    use musica_domain,                 only : domain_t, target_cells_t
+    use musica_domain,                 only : domain_t
+    use musica_domain_target_cells,    only : domain_target_cells_t
     use musica_iterator,               only : iterator_t
     use musica_property,               only : property_t
 
@@ -423,7 +425,7 @@ contains
     real(musica_dk) :: property_value
     class(iterator_t), pointer :: property_iter
     integer(kind=musica_ik) :: i_value, n_values
-    type(target_cells_t) :: all_cells
+    type(domain_target_cells_t) :: all_cells
     class(property_t), pointer :: prop
 
     call assert( 258704135, allocated( variable_names ) )
@@ -473,7 +475,8 @@ contains
     use musica_assert,                 only : assert
     use musica_config,                 only : config_t
     use musica_data_type,              only : kDouble
-    use musica_domain,                 only : domain_t, target_cells_t
+    use musica_domain,                 only : domain_t
+    use musica_domain_target_cells,    only : domain_target_cells_t
     use musica_iterator,               only : iterator_t
     use musica_property,               only : property_t
 
@@ -494,7 +497,7 @@ contains
     class(iterator_t), pointer :: photo_iter
     integer(kind=musica_ik) :: i_value, n_values
     class(property_t), pointer :: prop
-    type(target_cells_t) :: all_cells
+    type(domain_target_cells_t) :: all_cells
 
     call assert( 122874379, allocated( variable_names ) )
     photo_iter => config%get_iterator( )
