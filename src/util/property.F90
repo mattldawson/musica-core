@@ -108,7 +108,6 @@ contains
 
     character(len=*), parameter :: my_name = "Property constructor"
     type(string_t) :: temp_str
-    type(config_t) :: taget_config
     logical :: found
 
     allocate( new_obj )
@@ -205,16 +204,20 @@ contains
   subroutine assign_property( to, from )
 
     !> Property to assign
-    class(property_t), intent(out) :: to
+    class(property_t), intent(inout) :: to
     !> New property data
     type(property_t), intent(in) :: from
 
     to%name_ = from%name_
     to%units_ = from%units_
+    if( associated( to%applies_to_ ) ) deallocate( to%applies_to_ )
+    to%applies_to_ => null( )
     if( associated( from%applies_to_ ) ) then
       allocate( to%applies_to_, source = from%applies_to_ )
     end if
     to%data_type_ = from%data_type_
+    if( associated( to%default_value_ ) ) deallocate( to%default_value_ )
+    to%default_value_ => null( )
     if( associated( from%default_value_ ) ) then
       allocate( to%default_value_, source = from%default_value_ )
     end if

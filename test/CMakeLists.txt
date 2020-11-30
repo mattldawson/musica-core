@@ -25,6 +25,9 @@ add_std_test(util_convert)
 add_executable(util_datetime util/datetime.F90)
 add_std_test(util_datetime)
 
+add_executable(util_property util/property.F90)
+add_std_test(util_property)
+
 add_executable(util_string util/string.F90)
 add_std_test(util_string)
 
