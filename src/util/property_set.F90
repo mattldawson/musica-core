@@ -246,6 +246,7 @@ contains
 
     integer(kind=musica_ik) :: i_prop
     type(string_t) :: l_prefix, l_defined_by
+    class(target_t), pointer :: prop_target
 
     if( present( prefix ) ) l_prefix = prefix
     if( present( defined_by ) ) l_defined_by = defined_by
@@ -261,7 +262,13 @@ contains
         if( prop%data_type( ) .ne. data_type ) cycle
       end if
       if( present( applies_to ) ) then
-        if( prop%applies_to( ) .ne. applies_to ) cycle
+        prop_target => prop%applies_to( )
+        if( prop_target .ne. applies_to ) then
+          if( associated( prop_target ) ) deallocate( prop_target )
+          cycle
+        else
+          if( associated( prop_target ) ) deallocate( prop_target )
+        end if
       end if
       if( present( defined_by ) ) then
         if( prop%defined_by( ) .ne. l_defined_by ) cycle

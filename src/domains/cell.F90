@@ -14,56 +14,25 @@ module musica_domain_cell
   use musica_domain_iterator,          only : domain_iterator_t
   use musica_domain_state_accessor,    only : domain_state_accessor_t
   use musica_domain_state_mutator,     only : domain_state_mutator_t
-  use musica_property,                 only : property_ptr
-  use musica_property_set,             only : property_set_t
-  use musica_string,                   only : string_t
 
   implicit none
   private
 
   public :: domain_cell_t, domain_cell_state_t
 
-  !> Registered pairs
-  type :: registered_pair_t
-    !> Name of the registering model component
-    type(string_t) :: owner_
-    !> Registered property
-    type(property_ptr) :: property_
-  contains
-    !> Finalize the pair
-    final :: registered_pair_finalize
-  end type registered_pair_t
-
-  !> @}
-
   !> Model domain for a collection of unrelated cells or boxes
   type, extends(domain_t) :: domain_cell_t
-    private
-    !> Registered mutators
-    type(registered_pair_t), allocatable :: mutators_(:)
-    !> Registered accessors
-    type(registered_pair_t), allocatable :: accessors_(:)
   contains
     !> Returns the domain type as a string
     procedure :: type => domain_type
     !> Creates a new state for the domain
     procedure :: new_state
-    !> Requests a mutator for a domain state property
-    procedure :: mutator
-    !> Reuests mutators for a domain state property set
-    procedure :: mutator_set
-    !> Requests an accessor for a domain state property
-    procedure :: accessor
-    !> Requests accessors for a set of domain state properties
-    procedure :: accessor_set
-    !> Indicates whether a domain state property exists
-    procedure :: is_registered
-    !> Returns the units of a domain state property
-    procedure :: units
     !> Returns an iterator for the domain or a supported domain subset
     procedure :: iterator
-    !> Outputs the registered mutators and accessors
-    procedure :: output_registry
+    !> Allocates a mutator for a given data type and target domain
+    procedure, private :: allocate_mutator
+    !> Allocates an accessor for a given data type and target domain
+    procedure, private :: allocate_accessor
     !> Finalize the domain
     final :: finalize
   end type domain_cell_t
@@ -96,13 +65,8 @@ module musica_domain_cell
   !> Generic cell mutator
   type, extends(domain_state_mutator_t) :: mutator_cell_t
     private
-    !> Property modified by the mutator
-    type(property_ptr) :: property_
     !> Index of the property in the data-type specific domain state arrays
     integer(kind=musica_ik) :: index_ = -99999
-  contains
-    !> Returns the property modified by the mutator
-    procedure :: property => mutator_property
   end type mutator_cell_t
 
   !> Integer property mutator
@@ -128,13 +92,8 @@ module musica_domain_cell
   !> Generic cell accessor
   type, extends(domain_state_accessor_t) :: accessor_cell_t
     private
-    !> Property accessed by the accessor
-    type(property_ptr) :: property_
     !> Index of the property in the data-type specific domain state arrays
     integer(kind=musica_ik) :: index_ = -99999
-  contains
-    !> Returns the property accessed by the accessor
-    procedure :: property => accessor_property
   end type accessor_cell_t
 
   !> Integer property accessor
@@ -184,8 +143,6 @@ contains
     type(config_t), intent(inout) :: config
 
     allocate( new_obj )
-    allocate( new_obj%mutators_(  0 ) )
-    allocate( new_obj%accessors_( 0 ) )
     call new_obj%private_constructor( )
 
   end function constructor
@@ -194,6 +151,8 @@ contains
 
   !> Returns the domain type as a string
   function domain_type( this )
+
+    use musica_string,                 only : string_t
 
     !> Domain type
     type(string_t) :: domain_type
@@ -212,6 +171,8 @@ contains
     use musica_assert,                 only : assert
     use musica_data_type,              only : kInteger, kFloat, kDouble,      &
                                               kBoolean
+    use musica_property,               only : property_ptr
+    use musica_property_set,           only : property_set_t
 
     !> New domain state
     class(domain_state_t), pointer :: new_state
@@ -268,315 +229,6 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Requests a mutator for a domain state property
-  function mutator( this, property ) result( new_mutator )
-
-    use musica_assert,                 only : die_msg, die
-    use musica_data_type,              only : data_type_t, kBoolean, kDouble, &
-                                              kFloat, kInteger
-    use musica_domain_target_cells,    only : domain_target_cells_t
-    use musica_property,               only : property_t
-    use musica_target,                 only : target_t
-
-    !> Mutator for the requested property
-    class(domain_state_mutator_t), pointer :: new_mutator
-    !> Domain
-    class(domain_cell_t), intent(inout) :: this
-    !> Property to get mutator for
-    class(property_t), intent(in) :: property
-
-    class(property_set_t), pointer :: props, type_props
-    integer(kind=musica_ik) :: property_id
-    type(registered_pair_t) :: new_pair
-    class(target_t), pointer :: mutator_target
-    type(string_t) :: target_name, prop_name
-    type(data_type_t) :: data_type
-
-    props                   => this%properties( )
-    new_pair%owner_         =  property%defined_by( )
-    prop_name = property%name( )
-    new_pair%property_%val_ =>  props%get( prop_name%to_char( ) )
-    call add_registered_pair_to_array( this%mutators_, new_pair )
-
-    ! create the mutator
-    mutator_target => new_pair%property_%val_%applies_to( )
-    data_type      =  new_pair%property_%val_%data_type( )
-    select type( mutator_target )
-    class is( domain_target_cells_t )
-      if( data_type .eq. kInteger ) then
-        allocate( mutator_integer_t :: new_mutator )
-      else if( data_type .eq. kFloat ) then
-        allocate( mutator_float_t   :: new_mutator )
-      else if( data_type .eq. kDouble ) then
-        allocate( mutator_double_t  :: new_mutator )
-      else if( data_type .eq. kBoolean ) then
-        allocate( mutator_boolean_t :: new_mutator )
-      else
-        call die_msg( 399592430, "Unsupported data type requested for cell "//&
-                      "domain mutator for property '"//                       &
-                      new_pair%property_%val_%name( )//"'" )
-      end if
-    class default
-      target_name = mutator_target%name( )
-      call die_msg( 829993249, "Cell domains to not currently support '"//    &
-                    target_name%to_char( )//"' as a property target" )
-    end select
-    select type( new_mutator )
-    class is( mutator_cell_t )
-      new_mutator%property_%val_ => props%get( prop_name%to_char( ) )
-      type_props => props%subset( data_type = data_type )
-      new_mutator%index_ = type_props%index( property )
-      deallocate( type_props )
-    class default
-      call die( 101776555 )
-    end select
-    deallocate( mutator_target )
-    deallocate( props )
-
-  end function mutator
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Requests mutators for a set of domain state properties
-  !!
-  !! All members of the property set must have the same units and target
-  !! (sub)domain. Otherwise, the mutators must be requested individually.
-  !!
-  function mutator_set( this, variable_name, units, data_type, applies_to,    &
-      requestor ) result( new_mutators )
-
-    use musica_assert,                 only : assert, assert_msg, die_msg
-    use musica_data_type,              only : data_type_t
-    use musica_domain_state_mutator,   only : domain_state_mutator_ptr
-    use musica_property,               only : property_t
-    use musica_target,                 only : target_t
-
-    !> Mutators for the requested state variable set
-    class(domain_state_mutator_ptr), pointer :: new_mutators(:)
-    !> Domain
-    class(domain_cell_t), intent(inout) :: this
-    !> Name of the property set
-    character(len=*), intent(in) :: variable_name
-    !> Units for the property set members
-    character(len=*), intent(in) :: units
-    !> Data type for the property set members
-    class(data_type_t), intent(in) :: data_type
-    !> Model element(s) to which the properties apply
-    class(target_t), intent(in) :: applies_to
-    !> Name of the model component requesting the mutator
-    character(len=*), intent(in) :: requestor
-
-    type(property_ptr) :: prop_base, prop_spec, reg_prop
-    class(property_set_t), pointer :: all_props, subset_props
-    integer(kind=musica_ik) :: num_props, i_mutator
-    type(string_t) :: prop_name
-
-    call assert( 394642233, len( trim( variable_name ) ) .gt. 0 )
-
-    all_props => this%properties( )
-    subset_props => all_props%subset( prefix = variable_name )
-    num_props = subset_props%size( )
-    prop_base%val_ => property_t( requestor,                                  &
-                                  units = units,                              &
-                                  data_type = data_type,                      &
-                                  applies_to = applies_to )
-    allocate( new_mutators(    num_props ) )
-    do i_mutator = 1, num_props
-      reg_prop%val_ => subset_props%get( i_mutator )
-      prop_name = reg_prop%val_%name( )
-      prop_spec%val_ => property_t( prop_base%val_, requestor,                &
-                                    name = prop_name%to_char( ) )
-      new_mutators( i_mutator )%val_ => this%mutator( prop_spec%val_ )
-      deallocate( prop_spec%val_ )
-      deallocate( reg_prop%val_ )
-    end do
-    deallocate( all_props )
-    deallocate( subset_props )
-
-  end function mutator_set
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Requests a accessor for a domain state property
-  function accessor( this, property ) result( new_accessor )
-
-    use musica_assert,                 only : die_msg, die
-    use musica_data_type,              only : data_type_t, kBoolean, kDouble,  &
-                                              kFloat, kInteger
-    use musica_domain_target_cells,    only : domain_target_cells_t
-    use musica_property,               only : property_t
-    use musica_target,                 only : target_t
-
-    !> Accessor for the requested property
-    class(domain_state_accessor_t), pointer :: new_accessor
-    !> Domain
-    class(domain_cell_t), intent(inout) :: this
-    !> Property to access
-    class(property_t), intent(in) :: property
-
-    class(property_set_t), pointer :: props, type_props
-    integer(kind=musica_ik) :: property_id
-    type(registered_pair_t) :: new_pair
-    class(target_t), pointer :: accessor_target
-    type(string_t) :: target_name, prop_name
-    type(data_type_t) :: data_type
-
-    props                   => this%properties( )
-    new_pair%owner_         =  property%defined_by( )
-    prop_name = property%name( )
-    new_pair%property_%val_ => props%get( prop_name%to_char( ) )
-    call add_registered_pair_to_array( this%accessors_, new_pair )
-
-    ! create the accessor
-    accessor_target => new_pair%property_%val_%applies_to( )
-    data_type      =  new_pair%property_%val_%data_type( )
-    select type( accessor_target )
-    class is( domain_target_cells_t )
-      if( data_type .eq. kInteger ) then
-        allocate( accessor_integer_t :: new_accessor )
-      else if( data_type .eq. kFloat ) then
-        allocate( accessor_float_t   :: new_accessor )
-      else if( data_type .eq. kDouble ) then
-        allocate( accessor_double_t  :: new_accessor )
-      else if( data_type .eq. kBoolean ) then
-        allocate( accessor_boolean_t :: new_accessor )
-      else
-        call die_msg( 711130520, "Unsupported data type requested for cell "//&
-                      "domain accessor for property '"//                       &
-                      new_pair%property_%val_%name( )//"'" )
-      end if
-    class default
-      target_name = accessor_target%name( )
-      call die_msg( 823448865, "Cell domains to not currently support '"//    &
-                    target_name%to_char( )//"' as a property target" )
-    end select
-    select type( new_accessor )
-    class is( accessor_cell_t )
-      new_accessor%property_%val_ => props%get( prop_name%to_char( ) )
-      type_props => props%subset( data_type = data_type )
-      new_accessor%index_ = type_props%index( property )
-      deallocate( type_props )
-    class default
-      call die( 883192958 )
-    end select
-    deallocate( accessor_target )
-    deallocate( props )
-
-  end function accessor
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Gets accessors for a set of state variables for each cell in the domain
-  !!
-  !! All members of the property set must have the same units and target
-  !! (sub)domain. Otherwise, the mutators must be requested individually.
-  !!
-  function accessor_set( this, variable_name, units, data_type, applies_to,    &
-      requestor ) result( new_accessors )
-
-    use musica_assert,                 only : assert, assert_msg, die_msg
-    use musica_data_type,              only : data_type_t
-    use musica_domain_state_accessor,  only : domain_state_accessor_ptr
-    use musica_property,               only : property_t
-    use musica_target,                 only : target_t
-
-    !> Accessors for the requested state variable set
-    class(domain_state_accessor_ptr), pointer :: new_accessors(:)
-    !> Domain
-    class(domain_cell_t), intent(inout) :: this
-    !> Name of the property set
-    character(len=*), intent(in) :: variable_name
-    !> Units for the property set members
-    character(len=*), intent(in) :: units
-    !> Data type for the property set members
-    class(data_type_t), intent(in) :: data_type
-    !> Model element(s) to which the properties apply
-    class(target_t), intent(in) :: applies_to
-    !> Name of the model component requesting the accessor
-    character(len=*), intent(in) :: requestor
-
-    type(property_ptr) :: prop_base, prop_spec, reg_prop
-    class(property_set_t), pointer :: all_props, subset_props
-    integer(kind=musica_ik) :: num_props, i_accessor
-    type(string_t) :: prop_name
-
-    call assert( 367457939, len( trim( variable_name ) ) .gt. 0 )
-
-    all_props => this%properties( )
-    subset_props => all_props%subset( prefix = variable_name )
-    num_props = subset_props%size( )
-    prop_base%val_ => property_t( requestor,                                  &
-                                  units = units,                              &
-                                  data_type = data_type,                      &
-                                  applies_to = applies_to )
-    allocate( new_accessors(    num_props ) )
-    do i_accessor = 1, num_props
-      reg_prop%val_ => subset_props%get( i_accessor )
-      prop_name = reg_prop%val_%name( )
-      prop_spec%val_ => property_t( prop_base%val_, requestor,                &
-                                    name = prop_name%to_char( ) )
-      new_accessors( i_accessor )%val_ => this%accessor( prop_spec%val_ )
-      deallocate( prop_spec%val_ )
-      deallocate( reg_prop%val_ )
-    end do
-    deallocate( all_props )
-    deallocate( subset_props )
-
-  end function accessor_set
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Indicates whether a domain state property has been registered
-  logical function is_registered( this, property_name )
-
-    use musica_property,               only : property_t
-
-    !> Domain
-    class(domain_cell_t), intent(in) :: this
-    !> Name of the property to look for
-    character(len=*), intent(in) :: property_name
-
-    type(property_set_t), pointer :: props
-    class(property_t), pointer :: prop
-    integer(kind=musica_ik) :: var_id
-
-    props => this%properties( )
-    prop => props%get( property_name, found = is_registered )
-    deallocate( props )
-    if( associated( prop ) ) deallocate( prop )
-
-  end function is_registered
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Returns the units of a domain state property
-  function units( this, property_name )
-
-    use musica_assert,                 only : assert
-    use musica_property,               only : property_t
-    use musica_string,                 only : string_t
-
-    !> Units for the property
-    type(string_t) :: units
-    !> Domain
-    class(domain_cell_t), intent(in) :: this
-    !> Name of the registered state property
-    character(len=*), intent(in) :: property_name
-
-    type(property_set_t), pointer :: props
-    class(property_t), pointer :: prop
-
-    call assert( 425563855, len( trim( property_name ) ) .gt. 0 )
-    props => this%properties( )
-    prop => props%get( property_name )
-    units = prop%units( )
-    deallocate( props )
-    deallocate( prop )
-
-  end function units
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
   !> Returns an iterator for the domain or a supported domain subset
   function iterator( this, target_domain )
 
@@ -609,53 +261,113 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Outputs the registered mutators and accessors
-  subroutine output_registry( this, file_unit )
+  !> Allocates a mutator for a given target domain and data type
+  function allocate_mutator( this, target_domain, data_type, property_index ) &
+      result( mutator )
 
-    use musica_string,                 only : output_table
+    use musica_assert,                 only : die, die_msg
+    use musica_data_type,              only : data_type_t, kBoolean, kDouble, &
+                                              kFloat, kInteger
+    use musica_domain_target_cells,    only : domain_target_cells_t
+    use musica_string,                 only : string_t
+    use musica_target,                 only : target_t
 
+    !> Mutator
+    class(domain_state_mutator_t), pointer :: mutator
     !> Domain
     class(domain_cell_t), intent(in) :: this
-    !> File unit to output to
-    integer, intent(in), optional :: file_unit
+    !> Target domain for the mutator
+    class(target_t), intent(in) :: target_domain
+    !> Data type for the mutatable property
+    type(data_type_t), intent(in) :: data_type
+    !> Index for the property among registered properties of the same
+    !! target domain and data type
+    integer(kind=musica_ik), intent(in) :: property_index
 
-    integer(kind=musica_ik) :: f, i_elem
-    type(string_t) :: header(2)
-    type(string_t), allocatable :: table_data(:,:)
-    type(property_set_t), pointer :: props
+    type(string_t) :: target_name
 
-    f = 6
-    if( present( file_unit ) ) f = file_unit
-    props => this%properties( )
-    write(f,*)
-    write(f,*) "Registered domain properties"
-    write(f,*)
-    call props%output( f )
-    header(1) = "Owner"
-    header(2) = "Property"
-    allocate( table_data( 2, size( this%mutators_ ) ) )
-    do i_elem = 1, size( table_data )
-      table_data( 1, i_elem ) = this%mutators_( i_elem )%owner_
-      table_data( 2, i_elem ) = this%mutators_( i_elem )%property_%val_%name( )
-    end do
-    write(f,*)
-    write(f,*) "Registered mutators"
-    write(f,*)
-    call output_table( header, table_data, f )
-    deallocate( table_data )
-    allocate( table_data( 2, size( this%accessors_ ) ) )
-    do i_elem = 1, size( table_data )
-      table_data( 1, i_elem ) = this%accessors_( i_elem )%owner_
-      table_data( 2, i_elem ) =                                               &
-          this%accessors_( i_elem )%property_%val_%name( )
-    end do
-    write(f,*)
-    write(f,*) "Registered accessors"
-    write(f,*)
-    call output_table( header, table_data, f )
-    deallocate( props )
+    select type( target_domain )
+    class is( domain_target_cells_t )
+      if( data_type .eq. kInteger ) then
+        allocate( mutator_integer_t :: mutator )
+      else if( data_type .eq. kFloat ) then
+        allocate( mutator_float_t   :: mutator )
+      else if( data_type .eq. kDouble ) then
+        allocate( mutator_double_t  :: mutator )
+      else if( data_type .eq. kBoolean ) then
+        allocate( mutator_boolean_t :: mutator )
+      else
+        call die_msg( 706918026, "Unsupported data type requested for cell "//&
+                      "domain mutator." )
+      end if
+    class default
+      target_name = target_domain%name( )
+      call die_msg( 594599681, "Cell domains to not currently support '"//    &
+                    target_name%to_char( )//"' as a property target" )
+    end select
+    select type( mutator )
+    class is( mutator_cell_t )
+      mutator%index_ = property_index
+    class default
+      call die( 534855588 )
+    end select
 
-  end subroutine output_registry
+  end function allocate_mutator
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Allocates a accessor for a given target domain and data type
+  function allocate_accessor( this, target_domain, data_type, property_index ) &
+      result( accessor )
+
+    use musica_assert,                 only : die, die_msg
+    use musica_data_type,              only : data_type_t, kBoolean, kDouble, &
+                                              kFloat, kInteger
+    use musica_domain_target_cells,    only : domain_target_cells_t
+    use musica_string,                 only : string_t
+    use musica_target,                 only : target_t
+
+    !> Accessor
+    class(domain_state_accessor_t), pointer :: accessor
+    !> Domain
+    class(domain_cell_t), intent(in) :: this
+    !> Target domain for the accessor
+    class(target_t), intent(in) :: target_domain
+    !> Data type for the accessible property
+    type(data_type_t), intent(in) :: data_type
+    !> Index for the property among registered properties of the same
+    !! target domain and data type
+    integer(kind=musica_ik), intent(in) :: property_index
+
+    type(string_t) :: target_name
+
+    select type( target_domain )
+    class is( domain_target_cells_t )
+      if( data_type .eq. kInteger ) then
+        allocate( accessor_integer_t :: accessor )
+      else if( data_type .eq. kFloat ) then
+        allocate( accessor_float_t   :: accessor )
+      else if( data_type .eq. kDouble ) then
+        allocate( accessor_double_t  :: accessor )
+      else if( data_type .eq. kBoolean ) then
+        allocate( accessor_boolean_t :: accessor )
+      else
+        call die_msg( 711130520, "Unsupported data type requested for cell "//&
+                      "domain accessor." )
+      end if
+    class default
+      target_name = target_domain%name( )
+      call die_msg( 823448865, "Cell domains to not currently support '"//    &
+                    target_name%to_char( )//"' as a property target" )
+    end select
+    select type( accessor )
+    class is( accessor_cell_t )
+      accessor%index_ = property_index
+    class default
+      call die( 883192958 )
+    end select
+
+  end function allocate_accessor
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -668,18 +380,6 @@ contains
     call this%private_destructor( )
 
   end subroutine finalize
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Finalize a registered pair
-  subroutine registered_pair_finalize( this )
-
-    !> Registered pair
-    type(registered_pair_t), intent(inout) :: this
-
-    if( associated( this%property_%val_ ) ) deallocate( this%property_%val_ )
-
-  end subroutine registered_pair_finalize
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -803,48 +503,6 @@ contains
 
   !> @}
 
-  !> @name Functions of mutator_cell_t and accessor_cell_t
-  !!
-  !! @{
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Returns the property modified by the mutator
-  function mutator_property( this )
-
-    use musica_property,               only : property_t
-
-    !> Property modified
-    class(property_t), pointer :: mutator_property
-    !> Domain state mutator
-    class(mutator_cell_t), intent(in) :: this
-
-    allocate( mutator_property, mold = this%property_%val_ )
-    mutator_property = this%property_%val_
-
-  end function mutator_property
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Returns the property accessed by the accessor
-  function accessor_property( this )
-
-    use musica_property,               only : property_t
-
-    !> Property accessed
-    class(property_t), pointer :: accessor_property
-    !> Domain state accessor
-    class(accessor_cell_t), intent(in) :: this
-
-    allocate( accessor_property, mold = this%property_%val_ )
-    accessor_property = this%property_%val_
-
-  end function accessor_property
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> @}
-
   !> @name Functions of cell_iterator_t types
   !!
   !! @{
@@ -886,52 +544,5 @@ contains
   end subroutine domain_cell_iterator_reset
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> @}
-
-  !> @name Private functions of the musica_domain_cell module
-  !!
-  !! @{
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Adds a registered pair to an array of registered pairs
-  subroutine add_registered_pair_to_array( array, new_pair )
-
-    use musica_assert,                 only : assert
-
-    !> Array to add to
-    type(registered_pair_t), allocatable, intent(inout)  :: array(:)
-    !> Pair to add to array
-    type(registered_pair_t), intent(in) :: new_pair
-
-    type(registered_pair_t), allocatable :: temp_pairs(:)
-    integer(kind=musica_ik) :: i_elem, n_elem
-
-    ! this could be made more efficient, if necessary
-
-    call assert( 454015072, allocated( array ) )
-    n_elem = size( array )
-    allocate( temp_pairs( n_elem ) )
-    temp_pairs(:) = array(:)
-    do i_elem = 1, size( array )
-      array( i_elem )%property_%val_ => null( )
-    end do
-    deallocate( array )
-    allocate( array( n_elem + 1 ) )
-    array( :n_elem ) = temp_pairs(:)
-    do i_elem = 1, size( temp_pairs )
-      temp_pairs( i_elem )%property_%val_ => null( )
-    end do
-    array( n_elem + 1 )%owner_ = new_pair%owner_
-    allocate( array( n_elem + 1 )%property_%val_,                             &
-              mold = new_pair%property_%val_ )
-    array( n_elem + 1 )%property_%val_ = new_pair%property_%val_
-
-  end subroutine add_registered_pair_to_array
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> @}
 
 end module musica_domain_cell

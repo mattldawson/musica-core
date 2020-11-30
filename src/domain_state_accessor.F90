@@ -7,6 +7,8 @@
 !> The abstract domain_state_accessor_t type and related functions
 module musica_domain_state_accessor
 
+  use musica_property,                 only : property_ptr
+
   implicit none
   private
 
@@ -14,9 +16,13 @@ module musica_domain_state_accessor
 
   !> Abstract domain state accessor
   type, abstract :: domain_state_accessor_t
+    !> Property modified by the accessor
+    type(property_ptr) :: property_
   contains
-    !> Returns the accessible property
-    procedure(property), deferred :: property
+    !> Returns the modifiable property
+    procedure :: property
+    !> Attaches a property to the accessor (should only be called by domain_t)
+    procedure :: attach_property
   end type domain_state_accessor_t
 
   !> Accessor pointer
@@ -26,29 +32,55 @@ module musica_domain_state_accessor
     final :: finalize
   end type domain_state_accessor_ptr
 
-interface
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Returns the accessible property
-  function property( this )
-    use musica_property,               only : property_t
-    import domain_state_accessor_t
-    !> Accessible property
-    class(property_t), pointer :: property
-    !> Domain state accessor
-    class(domain_state_accessor_t), intent(in) :: this
-  end function property
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-end interface
-
 contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Finalizes the pointer
+  !> Returns the modifiable property
+  function property( this )
+
+    use musica_assert,                 only : assert
+    use musica_property,               only : property_t
+    use musica_string,                 only : string_t
+
+    !> Modifiable property
+    class(property_t), pointer :: property
+    !> Domain state accessor
+    class(domain_state_accessor_t), intent(in) :: this
+
+    type(string_t) :: defined_by
+
+    call assert( 280729359, associated( this%property_%val_ ) )
+    defined_by = this%property_%val_%defined_by( )
+    property => property_t( this%property_%val_, defined_by%to_char( ) )
+
+  end function property
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Attaches a property to the accessor (should only be called by domain_t)
+  subroutine attach_property( this, property )
+
+    use musica_assert,                 only : assert
+    use musica_property,               only : property_t
+    use musica_string,                 only : string_t
+
+    !> Accessor
+    class(domain_state_accessor_t), intent(inout) :: this
+    !> Property to attach to the accessor
+    class(property_t), intent(in) :: property
+
+    type(string_t) :: defined_by
+
+    defined_by = property%defined_by( )
+    call assert( 287899200, .not. associated( this%property_%val_ ) )
+    this%property_%val_ => property_t( property, defined_by%to_char( ) )
+
+  end subroutine attach_property
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Finalizes the accessor pointer
   subroutine finalize( this )
 
     !> Domain pointer
