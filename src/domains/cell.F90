@@ -20,7 +20,7 @@ module musica_domain_cell
 
   public :: domain_cell_t, domain_cell_state_t
 
-  !> Model domain for a collection of unrelated cells or boxes
+  !> Model domain for a single well-mixed air mass
   type, extends(domain_t) :: domain_cell_t
   contains
     !> Returns the domain type as a string
@@ -53,14 +53,21 @@ module musica_domain_cell
     !> Boolean properties
     logical(kind=musica_lk), allocatable :: booleans_(:)
   contains
-    !> Gets the value of a state variable
-    procedure :: get => state_get
-    !> Updates the value of a state variable
-    procedure :: update => state_update
+    !> @name Gets the value of a state variable
+    !! @{
+    procedure, private :: get_boolean => domain_cell_state_get_boolean
+    procedure, private :: get_double  => domain_cell_state_get_double
+    procedure, private :: get_float   => domain_cell_state_get_float
+    procedure, private :: get_integer => domain_cell_state_get_integer
+    !> @}
+    !> @name Updates the value of a state variable
+    !! @{
+    procedure, private :: update_boolean => domain_cell_state_update_boolean
+    procedure, private :: update_double  => domain_cell_state_update_double
+    procedure, private :: update_float   => domain_cell_state_update_float
+    procedure, private :: update_integer => domain_cell_state_update_integer
+    !> @}
   end type domain_cell_state_t
-
-  !> @name Mutators for cell state properties
-  !! @{
 
   !> Generic cell mutator
   type, extends(domain_state_mutator_t) :: mutator_cell_t
@@ -69,52 +76,38 @@ module musica_domain_cell
     integer(kind=musica_ik) :: index_ = -99999
   end type mutator_cell_t
 
-  !> Integer property mutator
-  type, extends(mutator_cell_t) :: mutator_integer_t
-  end type mutator_integer_t
-
-  !> Single-precision floating point property mutator
-  type, extends(mutator_cell_t) :: mutator_float_t
-  end type mutator_float_t
-
-  !> Double-precision floating point property mutator
-  type, extends(mutator_cell_t) :: mutator_double_t
-  end type mutator_double_t
-
-  !> Boolean property mutator
+  !> @name Cell mutators
+  !! @{
   type, extends(mutator_cell_t) :: mutator_boolean_t
   end type mutator_boolean_t
-
+  type, extends(mutator_cell_t) :: mutator_double_t
+  end type mutator_double_t
+  type, extends(mutator_cell_t) :: mutator_float_t
+  end type mutator_float_t
+  type, extends(mutator_cell_t) :: mutator_integer_t
+  end type mutator_integer_t
   !> @}
-  !> @name Accessors for cell state properties
-  !! @{
 
-  !> Generic cell accessor
+  !> Cell accessor
   type, extends(domain_state_accessor_t) :: accessor_cell_t
     private
     !> Index of the property in the data-type specific domain state arrays
     integer(kind=musica_ik) :: index_ = -99999
   end type accessor_cell_t
 
-  !> Integer property accessor
-  type, extends(accessor_cell_t) :: accessor_integer_t
-  end type accessor_integer_t
-
-  !> Single-precision floating point property accessor
-  type, extends(accessor_cell_t) :: accessor_float_t
-  end type accessor_float_t
-
-  !> Double-precision floating point property accessor
-  type, extends(accessor_cell_t) :: accessor_double_t
-  end type accessor_double_t
-
-  !> Boolean property accessor
+  !> @name Cell accessors
+  !! @{
   type, extends(accessor_cell_t) :: accessor_boolean_t
   end type accessor_boolean_t
-
+  type, extends(accessor_cell_t) :: accessor_double_t
+  end type accessor_double_t
+  type, extends(accessor_cell_t) :: accessor_float_t
+  end type accessor_float_t
+  type, extends(accessor_cell_t) :: accessor_integer_t
+  end type accessor_integer_t
   !> @}
 
-  !> Domain iterator
+  !> Cell iterator
   type, extends(domain_iterator_t) :: cell_iterator_t
     private
     !> Current cell id
@@ -389,8 +382,9 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Gets the value of a registered state property
-  subroutine state_get( this, iterator, accessor, state_value )
+  !> Gets the value of a registered state boolean property
+  subroutine domain_cell_state_get_boolean( this, iterator, accessor,         &
+      state_value )
 
     use musica_assert,                 only : die
 
@@ -401,39 +395,13 @@ contains
     !> Accessor for the state property
     class(domain_state_accessor_t), intent(in) :: accessor
     !> Value of the property or state variable
-    class(*), intent(out) :: state_value
+    logical(kind=musica_lk), intent(out) :: state_value
 
     select type( iterator )
     class is( cell_iterator_t )
       select type( accessor )
-      class is( accessor_integer_t )
-        select type( state_value )
-        type is( integer(kind=musica_ik) )
-          state_value = this%integers_( accessor%index_ )
-        class default
-          call die( 217442083 )
-        end select
-      class is( accessor_float_t )
-        select type( state_value )
-        type is( real(kind=musica_rk) )
-          state_value = this%floats_( accessor%index_ )
-        class default
-          call die( 882729073 )
-        end select
-      class is( accessor_double_t )
-        select type( state_value )
-        type is( real(kind=musica_dk) )
-          state_value = this%doubles_( accessor%index_ )
-        class default
-          call die( 258486777 )
-        end select
       class is( accessor_boolean_t )
-        select type( state_value )
-        type is( logical )
-          state_value = this%booleans_( accessor%index_ )
-        class default
-          call die( 411397521 )
-        end select
+        state_value = this%booleans_( accessor%index_ )
       class default
         call die( 583459959 )
       end select
@@ -441,12 +409,106 @@ contains
       call die( 302890244 )
     end select
 
-  end subroutine state_get
+  end subroutine domain_cell_state_get_boolean
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Updates the value of a registered state property
-  subroutine state_update( this, iterator, mutator, state_value )
+  !> Gets the value of a registered state double property
+  subroutine domain_cell_state_get_double( this, iterator, accessor,          &
+      state_value )
+
+    use musica_assert,                 only : die
+
+    !> Domain state
+    class(domain_cell_state_t), intent(in) :: this
+    !> Domain iterator
+    class(domain_iterator_t), intent(in) :: iterator
+    !> Accessor for the state property
+    class(domain_state_accessor_t), intent(in) :: accessor
+    !> Value of the property or state variable
+    real(kind=musica_dk), intent(out) :: state_value
+
+    select type( iterator )
+    class is( cell_iterator_t )
+      select type( accessor )
+      class is( accessor_double_t )
+        state_value = this%doubles_( accessor%index_ )
+      class default
+        call die( 175122252 )
+      end select
+    class default
+      call die( 622490098 )
+    end select
+
+  end subroutine domain_cell_state_get_double
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Gets the value of a registered state float property
+  subroutine domain_cell_state_get_float( this, iterator, accessor,           &
+      state_value )
+
+    use musica_assert,                 only : die
+
+    !> Domain state
+    class(domain_cell_state_t), intent(in) :: this
+    !> Domain iterator
+    class(domain_iterator_t), intent(in) :: iterator
+    !> Accessor for the state property
+    class(domain_state_accessor_t), intent(in) :: accessor
+    !> Value of the property or state variable
+    real(kind=musica_rk), intent(out) :: state_value
+
+    select type( iterator )
+    class is( cell_iterator_t )
+      select type( accessor )
+      class is( accessor_float_t )
+        state_value = this%floats_( accessor%index_ )
+      class default
+        call die( 734808443 )
+      end select
+    class default
+      call die( 282176290 )
+    end select
+
+  end subroutine domain_cell_state_get_float
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Gets the value of a registered state integer property
+  subroutine domain_cell_state_get_integer( this, iterator, accessor,         &
+      state_value )
+
+    use musica_assert,                 only : die
+
+    !> Domain state
+    class(domain_cell_state_t), intent(in) :: this
+    !> Domain iterator
+    class(domain_iterator_t), intent(in) :: iterator
+    !> Accessor for the state property
+    class(domain_state_accessor_t), intent(in) :: accessor
+    !> Value of the property or state variable
+    integer(kind=musica_ik), intent(out) :: state_value
+
+    select type( iterator )
+    class is( cell_iterator_t )
+      select type( accessor )
+      class is( accessor_integer_t )
+        state_value = this%integers_( accessor%index_ )
+      class default
+        call die( 676969884 )
+      end select
+    class default
+      call die( 224337731 )
+    end select
+
+  end subroutine domain_cell_state_get_integer
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Updates the value of a registered state boolean property
+  subroutine domain_cell_state_update_boolean( this, iterator, mutator,       &
+      state_value )
 
     use musica_assert,                 only : die
 
@@ -457,47 +519,114 @@ contains
     !> Mutator for registered property or state variable
     class(domain_state_mutator_t), intent(in) :: mutator
     !> New value
-    class(*), intent(in) :: state_value
+    logical(kind=musica_lk), intent(in) :: state_value
+
+    select type( iterator )
+    class is( cell_iterator_t )
+      select type( mutator )
+      class is( mutator_boolean_t )
+        this%booleans_( mutator%index_ ) = state_value
+      class default
+        call die( 944556802 )
+      end select
+    class default
+      call die( 156875148 )
+    end select
+
+  end subroutine domain_cell_state_update_boolean
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Updates the value of a registered state double property
+  subroutine domain_cell_state_update_double( this, iterator, mutator,       &
+      state_value )
+
+    use musica_assert,                 only : die
+
+    !> Domain state
+    class(domain_cell_state_t), intent(inout) :: this
+    !> Domain iterator
+    class(domain_iterator_t), intent(in) :: iterator
+    !> Mutator for registered property or state variable
+    class(domain_state_mutator_t), intent(in) :: mutator
+    !> New value
+    real(kind=musica_dk), intent(in) :: state_value
+
+    select type( iterator )
+    class is( cell_iterator_t )
+      select type( mutator )
+      class is( mutator_double_t )
+        this%doubles_( mutator%index_ ) = state_value
+      class default
+        call die( 204185093 )
+      end select
+    class default
+      call die( 999036588 )
+    end select
+
+  end subroutine domain_cell_state_update_double
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Updates the value of a registered state float property
+  subroutine domain_cell_state_update_float( this, iterator, mutator,       &
+      state_value )
+
+    use musica_assert,                 only : die
+
+    !> Domain state
+    class(domain_cell_state_t), intent(inout) :: this
+    !> Domain iterator
+    class(domain_iterator_t), intent(in) :: iterator
+    !> Mutator for registered property or state variable
+    class(domain_state_mutator_t), intent(in) :: mutator
+    !> New value
+    real(kind=musica_rk), intent(in) :: state_value
+
+    select type( iterator )
+    class is( cell_iterator_t )
+      select type( mutator )
+      class is( mutator_float_t )
+        this%floats_( mutator%index_ ) = state_value
+      class default
+        call die( 323673279 )
+      end select
+    class default
+      call die( 771041125 )
+    end select
+
+  end subroutine domain_cell_state_update_float
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Updates the value of a registered state integer property
+  subroutine domain_cell_state_update_integer( this, iterator, mutator,       &
+      state_value )
+
+    use musica_assert,                 only : die
+
+    !> Domain state
+    class(domain_cell_state_t), intent(inout) :: this
+    !> Domain iterator
+    class(domain_iterator_t), intent(in) :: iterator
+    !> Mutator for registered property or state variable
+    class(domain_state_mutator_t), intent(in) :: mutator
+    !> New value
+    integer(kind=musica_ik), intent(in) :: state_value
 
     select type( iterator )
     class is( cell_iterator_t )
       select type( mutator )
       class is( mutator_integer_t )
-        select type( state_value )
-        type is( integer(kind=musica_ik) )
-          this%integers_( mutator%index_ ) = state_value
-        class default
-          call die( 442818191 )
-        end select
-      class is( mutator_float_t )
-        select type( state_value )
-        type is( real(kind=musica_rk) )
-          this%floats_( mutator%index_ ) = state_value
-        class default
-          call die( 772603385 )
-        end select
-      class is( mutator_double_t )
-        select type( state_value )
-        type is( real(kind=musica_dk) )
-          this%doubles_( mutator%index_ ) = state_value
-        class default
-          call die( 602446481 )
-        end select
-      class is( mutator_boolean_t )
-        select type( state_value )
-        type is( logical )
-          this%booleans_( mutator%index_ ) = state_value
-        class default
-          call die( 432289577 )
-        end select
+        this%integers_( mutator%index_ ) = state_value
       class default
-        call die( 327141073 )
+        call die( 148252068 )
       end select
     class default
-      call die( 492033670 )
+      call die( 595619914 )
     end select
 
-  end subroutine state_update
+  end subroutine domain_cell_state_update_integer
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
