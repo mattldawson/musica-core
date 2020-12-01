@@ -28,8 +28,6 @@ module musica_data_type
     generic :: operator(/=) => not_equals_data_type
     !> Name of the data type
     procedure :: name
-    !> Cast a scalar variable as the data type
-    procedure :: cast
   end type data_type_t
 
   !> Constructor of data_type_t objects
@@ -148,35 +146,6 @@ contains
     end select
 
   end function name
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !> Cast a scalar variable as the data type
-  subroutine cast( this, variable )
-
-    use musica_assert,                 only : die, die_msg
-
-    !> Data type
-    class(data_type_t), intent(in) :: this
-    !> Variable to cast
-    class(*), pointer :: variable
-
-    select case( this%id_ )
-    case( kInteger%id_ )
-      allocate( integer(kind=musica_ik) :: variable )
-    case( kFloat%id_ )
-      allocate( real(kind=musica_rk ) :: variable )
-    case( kDouble%id_ )
-      allocate( real(kind=musica_dk ) :: variable )
-    case( kBoolean%id_ )
-      allocate( logical(kind=musica_lk) :: variable )
-    case( kTypeUnknown%id_ )
-      call die_msg( 234998563, "Cannot cast variable as 'unknown' type." )
-    case default
-      call die( 289478349 )
-    end select
-
-  end subroutine cast
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 

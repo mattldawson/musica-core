@@ -22,11 +22,17 @@ add_std_test(util_array)
 add_executable(util_convert util/convert.F90)
 add_std_test(util_convert)
 
+add_executable(util_data_type util/data_type.F90)
+add_std_test(util_data_type)
+
 add_executable(util_datetime util/datetime.F90)
 add_std_test(util_datetime)
 
 add_executable(util_property util/property.F90)
 add_std_test(util_property)
+
+add_executable(util_property_set util/property_set.F90)
+add_std_test(util_property_set)
 
 add_executable(util_string util/string.F90)
 add_std_test(util_string)
