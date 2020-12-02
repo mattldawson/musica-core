@@ -246,6 +246,7 @@ contains
       call assert_msg( 460201666, existing_prop .eq. property,                &
                        "Trying to overwrite domain property '"//              &
                        trim( prop_name%to_char( ) )//"'" )
+      deallocate( existing_prop )
       return
     end if
     call assert( 823250106, .not. this%is_locked_ )

@@ -106,6 +106,8 @@ contains
                                applies_to = all_cells )                         !- target domain
       new_obj%pairs_( i_rate )%get_species_ => domain%accessor( chem_prop )
       new_obj%pairs_( i_rate )%set_species_ => domain%mutator(  chem_prop )
+      deallocate( loss_prop )
+      deallocate( chem_prop )
     end do
 
     deallocate( rates )
