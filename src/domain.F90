@@ -226,14 +226,28 @@ contains
   !> Registers a domain state property
   subroutine register_property( this, property )
 
-    use musica_assert,                 only : assert
+    use musica_assert,                 only : assert, assert_msg
     use musica_property,               only : property_t
+    use musica_string,                 only : string_t
 
     !> Domain
     class(domain_t), intent(inout) :: this
     !> Property to add to the domain registry
     class(property_t), intent(in) :: property
 
+    logical :: found
+    type(string_t) :: prop_name
+    class(property_t), pointer :: existing_prop
+
+    prop_name = property%name( )
+    existing_prop => this%properties_%get( prop_name%to_char( ),              &
+                                           found = found )
+    if( found ) then
+      call assert_msg( 460201666, existing_prop .eq. property,                &
+                       "Trying to overwrite domain property '"//              &
+                       trim( prop_name%to_char( ) )//"'" )
+      return
+    end if
     call assert( 823250106, .not. this%is_locked_ )
     call this%properties_%add( property )
 
@@ -570,15 +584,12 @@ contains
     if( present( file_unit ) ) f = file_unit
     write(f,*)
     write(f,*) "Registered domain properties"
-    write(f,*)
     call this%properties_%output( f )
     write(f,*)
     write(f,*) "Registered mutators"
-    write(f,*)
     call this%mutators_%output( f )
     write(f,*)
     write(f,*) "Registered accessors"
-    write(f,*)
     call this%accessors_%output( f )
 
   end subroutine output_registry

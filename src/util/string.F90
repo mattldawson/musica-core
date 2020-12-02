@@ -1248,14 +1248,18 @@ contains
     !> File unit
     integer(kind=musica_ik), intent(in) :: file_unit
 
+    integer(kind=musica_ik), parameter :: kMaxWidth = 120
     type(string_t) :: temp_str
     character(len=256) :: fmt_row, fmt_div
-    integer(kind=musica_ik) :: i_col, i_row, table_width
+    integer(kind=musica_ik) :: i_col, i_row, table_width, str_len
     integer(kind=musica_ik), allocatable :: max_len(:)
     real(kind=musica_dk) :: frac
 
     call assert_msg( 239541866, size( header ) .eq. size( table, dim = 1 ),   &
-                     "Mismatched table header/data." )
+                     "Mismatched table header/data. Number of header "//      &
+                     "columns: "//trim( to_char( size( header ) ) )//         &
+                     ". Number of data columns: "//                           &
+                     trim( to_char( size( table, dim = 1 ) ) ) )
     allocate( max_len( size( header ) ) )
     do i_col = 1, size( header )
       max_len( i_col ) = header( i_col )%length( )
@@ -1269,28 +1273,62 @@ contains
     do i_col = 1, size( max_len )
       table_width = table_width + 3 + max_len( i_col )
     end do
-    if( table_width .gt. 80 ) then
-      frac = 80.0_musica_dk / real( ( table_width - 1 - 3*size( max_len ) ),  &
-                                    kind=musica_dk )
+    if( table_width .gt. kMaxWidth ) then
+      frac = real( kMaxWidth, kind=musica_dk ) /                              &
+             real( ( table_width - 1 - 3*size( max_len ) ), kind=musica_dk )
+      table_width = 0
       do i_col = 1, size( max_len )
         max_len( i_col ) = floor( max_len( i_col ) * frac )
+        table_width = table_width + 3 + max_len( i_col )
       end do
     end if
 
+    if( table_width .ge. 10 .and. table_width .le. 99 ) then
+      write(fmt_div, '(a,i2,a)') '(', table_width, "('-'))"
+    else if( table_width .ge. 100 .and. table_width .le. 1000 ) then
+      write(fmt_div, '(a,i3,a)') '(', table_width, "('-'))"
+    else
+      call assert_msg( 289029811, .false., "Invalid table width" )
+    end if
+    write(file_unit, fmt_div)
+
     temp_str = '("|"'
     do i_col = 1, size( max_len )
-      temp_str = temp_str//'," ",a'//to_char( max_len( i_col ) )
+      temp_str = temp_str//',1x,"'
+      str_len = header( i_col )%length( )
+      if( str_len .ge. max_len( i_col ) ) then
+        temp_str = temp_str//header( i_col )%val_( 1 : max_len( i_col ) )
+      else
+        temp_str = temp_str//header( i_col )//'",'//                          &
+                   trim( to_char( max_len( i_col ) - str_len ) )//'x,"'
+      end if
+      temp_str = temp_str//' |"'
     end do
-    temp_str = temp_str//'," |")'
+    temp_str = temp_str//')'
     write(fmt_row, '(a)') temp_str%val_
-    write(fmt_div, '(a,i2,a)') '(', table_width, "('-'))"
+    write(file_unit, fmt_row)
 
     write(file_unit, fmt_div)
-    write(file_unit, fmt_row) header
-    write(file_unit, fmt_div)
+
     do i_row = 1, size( table, dim = 2 )
-      write(file_unit, fmt_row) table( :, i_row )
+      temp_str = '("|"'
+      do i_col = 1, size( max_len )
+        temp_str = temp_str//',1x,"'
+        str_len = table( i_col, i_row )%length( )
+        if( str_len .ge. max_len( i_col ) ) then
+          temp_str = temp_str//                                               &
+                     table( i_col, i_row )%val_( 1 : max_len( i_col ) )
+        else
+          temp_str = temp_str//table( i_col, i_row )//'",'//                  &
+                     trim( to_char( max_len( i_col ) - str_len ) )//'x,"'
+        end if
+        temp_str = temp_str//' |"'
+      end do
+      temp_str = temp_str//')'
+      write(fmt_row, '(a)') temp_str%val_
+      write(file_unit, fmt_row)
     end do
+
     write(file_unit, fmt_div)
 
   end subroutine output_table

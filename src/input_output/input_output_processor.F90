@@ -29,6 +29,7 @@ module musica_input_output_processor
   !! \todo add example usage for I/O processors
   !!
   type :: input_output_processor_t
+    private
     !> File attributes and functions
     class(file_t), pointer :: file_ => null( )
     !> Time dimension

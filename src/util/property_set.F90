@@ -301,7 +301,7 @@ contains
     class(target_t), pointer :: applies_to
 
     call assert( 981304030, allocated( this%properties_ ) )
-    allocate( table( 6, size( this%properties_ ) ) )
+    allocate( table( 5, size( this%properties_ ) ) )
     header(1) = "Property"
     header(2) = "Units"
     header(3) = "Data Type"

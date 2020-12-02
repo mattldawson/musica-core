@@ -210,6 +210,8 @@ contains
       deallocate( evo_cond_file )
     end do
 
+    write(*,*) "... done!"
+
   end subroutine preprocess_input
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

@@ -76,7 +76,7 @@ contains
     class(domain_t), intent(inout) :: domain
 
     character(len=*), parameter :: my_name = 'loss_t constructor'
-    type(domain_state_accessor_ptr), pointer :: rates(:)
+    class(domain_state_accessor_ptr), pointer :: rates(:)
     type(string_t) :: species_name
     integer(kind=musica_ik) :: i_rate
     class(property_t), pointer :: loss_prop, chem_prop

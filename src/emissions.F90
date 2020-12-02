@@ -76,7 +76,7 @@ contains
     class(domain_t), intent(inout) :: domain
 
     character(len=*), parameter :: my_name = 'emissions_t constructor'
-    type(domain_state_accessor_ptr), pointer :: rates(:)
+    class(domain_state_accessor_ptr), pointer :: rates(:)
     type(string_t) :: species_name
     class(property_t), pointer :: emit_prop, chem_prop
     integer(kind=musica_ik) :: i_rate
@@ -122,6 +122,7 @@ contains
     use musica_assert,                 only : assert
     use musica_domain_state,           only : domain_state_t
     use musica_domain_iterator,        only : domain_iterator_t
+    use musica_property,               only : property_t
 
     !> Emissions handler
     class(emissions_t), intent(in) :: this
@@ -134,6 +135,7 @@ contains
 
     integer(kind=musica_ik) :: i_rate
     real(kind=musica_dk) :: conc, rate
+    class(property_t), pointer :: prop
 
     call assert( 189684562, allocated( this%pairs_ ) )
     do i_rate = 1, size( this%pairs_ )

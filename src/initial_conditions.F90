@@ -206,6 +206,8 @@ contains
     deallocate( state          )
     deallocate( init_cond_file )
 
+    write(*,*) "...done!"
+
   end subroutine preprocess_input
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
