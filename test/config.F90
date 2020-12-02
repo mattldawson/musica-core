@@ -277,6 +277,7 @@ contains
         '  "my sub config" : { "an int" : 3, "a double" : 6.7 },'//&
         '  "my property [K]" : 295.6,'//&
         '  "my string array" : [ "foo", "bar", "foobar" ] }'
+    call assert( 494127713, a%number_of_children( ) .eq. 8 )
     iterator => a%get_iterator( )
     call assert( 909667855, iterator%next( ) )
     call a%get( iterator, ia, my_name )
@@ -422,6 +423,10 @@ do while( iter%next( ) )
   call sub_real_config%get( iter, my_real, my_name )
   write(*,*) my_string, " value: ", my_real
 end do
+ 
+! you can also get the number of child objects before iterating over
+! them, if you want to allocate an array or something first
+write(*,*) "number of children: ", sub_real_config%number_of_children( )
  
 ! you can add key-value pairs with the add function
 call main_config%add( "my new int", 43, my_name )

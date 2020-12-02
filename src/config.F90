@@ -114,6 +114,10 @@ module musica_config
   !!     write(*,*) my_string, " value: ", my_real
   !!   end do
   !!
+  !!   ! you can also get the number of child objects before iterating over
+  !!   ! them, if you want to allocate an array or something first
+  !!   write(*,*) "number of children: ", sub_real_config%number_of_children( )
+  !!
   !!   ! you can add key-value pairs with the add function
   !!   call main_config%add( "my new int", 43, my_name )
   !!   call main_config%get( "my new int", my_int, my_name )
@@ -151,6 +155,7 @@ module musica_config
   !!   foo  value:    14.199999999999999
   !!   bar  value:    64.200000000000003
   !!   foobar  value:    920.39999999999998
+  !!  number of children:            3
   !!  my new int value:           43
   !! \endcode
   !!
@@ -170,6 +175,8 @@ module musica_config
     procedure :: from_file => construct_from_file
     !> Writes a configuration to a file
     procedure :: to_file
+    !> Returns the number of child objects
+    procedure :: number_of_children
     !> Gets an iterator for the configuration data
     procedure :: get_iterator
     !> Gets the key name for a key-value pair
@@ -319,6 +326,27 @@ contains
     call this%core_%print( this%value_, file_name )
 
   end subroutine to_file
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Returns the number of child objects
+  function number_of_children( this )
+
+    use json_module,                   only : json_ik
+    use musica_assert,                 only : assert
+
+    !> Number of child objects
+    integer(kind=musica_ik) :: number_of_children
+    !> Configuration
+    class(config_t), intent(inout) :: this
+
+    integer(kind=json_ik) :: n_children
+
+    call assert( 344123447, associated( this%value_ ) )
+    call this%core_%info( this%value_, n_children = n_children )
+    number_of_children = int( n_children, kind=musica_ik )
+
+  end function number_of_children
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -1431,7 +1459,8 @@ contains
 
     call assert( 373881364, associated( this%config_%value_ ) )
     this%id_ = this%id_ + 1
-    call this%config_%core_%info( this%config_%value_, n_children = n_children )
+    call this%config_%core_%info( this%config_%value_,                        &
+                                  n_children = n_children )
     if( this%id_ .le. n_children ) then
       iterator_next = .true.
     else
