@@ -12,7 +12,8 @@ module musica_string
   implicit none
   private
 
-  public :: string_t, operator(//), operator(==), operator(/=), to_char
+  public :: string_t, operator(//), operator(==), operator(/=), to_char,      &
+            output_table
 
   !> Length of character array for to_char conversions
   integer(kind=musica_ik), parameter :: kConvertCharLength = 100
@@ -222,61 +223,66 @@ contains
   !> Assigns from a string
   subroutine assign_string( to, from )
 
-    use musica_assert,                 only : die_msg, assert_msg
-
     !> Object to assign
     class(*), intent(inout) :: to
     !> String
     class(string_t), intent(in) :: from
 
+    type(string_t) :: l_from
     integer :: ios, len_char, len_str
 
+    if( allocated( from%val_ ) ) then
+      l_from%val_ = from%val_
+    else
+      l_from%val_ = ""
+    end if
     select type( to )
       type is( string_t )
-        to%val_ = from%val_
+        to%val_ = l_from%val_
       type is( character(len=*) )
         len_char = len( to )
-        len_str  = len( from%val_ )
+        len_str  = len( l_from%val_ )
         if( len_char .lt. len_str ) then
-          to = from%val_(1:len_char)
+          to = l_from%val_(1:len_char)
         else
-          to = from%val_
+          to = l_from%val_
         end if
       type is( real )
-        call assert_msg( 621504169, len( from%val_ ) .le. 40,                 &
-                         "Error converting '"//from%val_//"' to real: "//     &
+        call assert_msg( 621504169, len( l_from%val_ ) .le. 40,               &
+                         "Error converting '"//l_from%val_//"' to real: "//   &
                          "string too long" )
-        read( from%val_, '(f40.0)', iostat=ios ) to
+        read( l_from%val_, '(f40.0)', iostat=ios ) to
         call assert_msg( 102862672, ios .eq. 0,                               &
-                         "Error converting '"//from%val_//"' to real: "//     &
+                         "Error converting '"//l_from%val_//"' to real: "//   &
                          "IOSTAT = "//trim( to_char( ios ) ) )
       type is( double precision)
-        call assert_msg( 156176342, len( from%val_ ) .le. 40,                 &
-                         "Error converting '"//from%val_//"' to double: "//   &
+        call assert_msg( 156176342, len( l_from%val_ ) .le. 40,               &
+                         "Error converting '"//l_from%val_//"' to double: "// &
                          "string too long" )
-        read( from%val_, '(f40.0)', iostat=ios ) to
+        read( l_from%val_, '(f40.0)', iostat=ios ) to
         call assert_msg( 445821432, ios .eq. 0,                               &
-                         "Error converting '"//from%val_//"' to double: "//   &
+                         "Error converting '"//l_from%val_//"' to double: "// &
                          "IOSTAT = "//trim( to_char( ios ) ) )
       type is( integer )
-        call assert_msg( 822629448, len( from%val_ ) .le. 20,                 &
-                         "Error converting '"//from%val_//"' to integer: "//  &
+        call assert_msg( 822629448, len( l_from%val_ ) .le. 20,               &
+                         "Error converting '"//l_from%val_//"' to integer: "//&
                          "string too long" )
-        read( from%val_, '(i20)', iostat=ios ) to
+        read( l_from%val_, '(i20)', iostat=ios ) to
         call assert_msg( 484221174, ios .eq. 0,                               &
-                         "Error converting '"//from%val_//"' to integer: "//  &
+                         "Error converting '"//l_from%val_//"' to integer: "//&
                          "IOSTAT = "//trim( to_char( ios ) ) )
       type is( logical )
-        if( from .eq. "true" ) then
+        if( l_from .eq. "true" ) then
           to = .true.
-        else if( from .eq. "false" ) then
+        else if( l_from .eq. "false" ) then
           to = .false.
         else
-          call die_msg( 359920976, "Cannot convert '"//from%val_//            &
-                        "' to logical" )
+          call assert_msg( 359920976, .false.,                                &
+                           "Cannot convert '"//l_from%val_//"' to logical" )
         end if
       class default
-        call die_msg( 383270832, "Invalid type for assignment from string" )
+        call assert_msg( 383270832, .false.,                                  &
+                         "Invalid type for assignment l_from string" )
     end select
 
   end subroutine assign_string
@@ -1229,6 +1235,134 @@ contains
     end if
 
   end function logical_to_char
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Output tabular data to a given file unit
+  subroutine output_table( header, table, file_unit )
+
+    !> Table header
+    type(string_t), intent(in) :: header(:)
+    !> Table data (column, row)
+    type(string_t), intent(in) :: table(:,:)
+    !> File unit
+    integer(kind=musica_ik), intent(in) :: file_unit
+
+    integer(kind=musica_ik), parameter :: kMaxWidth = 120
+    type(string_t) :: temp_str
+    character(len=256) :: fmt_row, fmt_div
+    integer(kind=musica_ik) :: i_col, i_row, table_width, str_len
+    integer(kind=musica_ik), allocatable :: max_len(:)
+    real(kind=musica_dk) :: frac
+
+    call assert_msg( 239541866, size( header ) .eq. size( table, dim = 1 ),   &
+                     "Mismatched table header/data. Number of header "//      &
+                     "columns: "//trim( to_char( size( header ) ) )//         &
+                     ". Number of data columns: "//                           &
+                     trim( to_char( size( table, dim = 1 ) ) ) )
+    allocate( max_len( size( header ) ) )
+    do i_col = 1, size( header )
+      max_len( i_col ) = header( i_col )%length( )
+      do i_row = 1, size( table, dim = 2 )
+        if( max_len( i_col ) .lt. table( i_col, i_row )%length( ) ) then
+          max_len( i_col ) = table( i_col, i_row )%length( )
+        end if
+      end do
+    end do
+    table_width = 1
+    do i_col = 1, size( max_len )
+      table_width = table_width + 3 + max_len( i_col )
+    end do
+    if( table_width .gt. kMaxWidth ) then
+      frac = real( kMaxWidth, kind=musica_dk ) /                              &
+             real( ( table_width - 1 - 3*size( max_len ) ), kind=musica_dk )
+      table_width = 0
+      do i_col = 1, size( max_len )
+        max_len( i_col ) = floor( max_len( i_col ) * frac )
+        table_width = table_width + 3 + max_len( i_col )
+      end do
+    end if
+
+    if( table_width .ge. 10 .and. table_width .le. 99 ) then
+      write(fmt_div, '(a,i2,a)') '(', table_width, "('-'))"
+    else if( table_width .ge. 100 .and. table_width .le. 1000 ) then
+      write(fmt_div, '(a,i3,a)') '(', table_width, "('-'))"
+    else
+      call assert_msg( 289029811, .false., "Invalid table width" )
+    end if
+    write(file_unit, fmt_div)
+
+    temp_str = '("|"'
+    do i_col = 1, size( max_len )
+      temp_str = temp_str//',1x,"'
+      str_len = header( i_col )%length( )
+      if( str_len .ge. max_len( i_col ) ) then
+        temp_str = temp_str//header( i_col )%val_( 1 : max_len( i_col ) )
+      else
+        temp_str = temp_str//header( i_col )//'",'//                          &
+                   trim( to_char( max_len( i_col ) - str_len ) )//'x,"'
+      end if
+      temp_str = temp_str//' |"'
+    end do
+    temp_str = temp_str//')'
+    write(fmt_row, '(a)') temp_str%val_
+    write(file_unit, fmt_row)
+
+    write(file_unit, fmt_div)
+
+    do i_row = 1, size( table, dim = 2 )
+      temp_str = '("|"'
+      do i_col = 1, size( max_len )
+        temp_str = temp_str//',1x,"'
+        str_len = table( i_col, i_row )%length( )
+        if( str_len .ge. max_len( i_col ) ) then
+          temp_str = temp_str//                                               &
+                     table( i_col, i_row )%val_( 1 : max_len( i_col ) )
+        else
+          temp_str = temp_str//table( i_col, i_row )//'",'//                  &
+                     trim( to_char( max_len( i_col ) - str_len ) )//'x,"'
+        end if
+        temp_str = temp_str//' |"'
+      end do
+      temp_str = temp_str//')'
+      write(fmt_row, '(a)') temp_str%val_
+      write(file_unit, fmt_row)
+    end do
+
+    write(file_unit, fmt_div)
+
+  end subroutine output_table
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Local assert function
+  subroutine assert_msg( code, condition, error_message )
+
+    !> Unique code for the assertion
+    integer, intent(in) :: code
+    !> Condition to evaluate
+    logical, intent(in) :: condition
+    !> Message to display on failure
+    character(len=*), intent(in) :: error_message
+
+    integer, parameter :: kErrorFileId = 10
+    integer, parameter :: kErrorId     = 0
+    character(len=50) :: str_code
+
+    if( .not. condition ) then
+      write(str_code,'(i30)') code
+      write(kErrorId,*) "ERROR (MusicBox-"//trim( adjustl( str_code ) )//"): "&
+                        //error_message
+      open( unit = kErrorFileId, file = "error.json", action = "WRITE" )
+      write(kErrorFileId,'(A)') '{'
+      write(kErrorFileId,'(A)') '  "code" : "'//trim( adjustl( str_code ) )//'",'
+      write(kErrorFileId,'(A)') '  "message" : "'//error_message//'"'
+      write(kErrorFileId,'(A)') '}'
+      close(kErrorFileId)
+      stop 3
+    end if
+
+  end subroutine assert_msg
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 

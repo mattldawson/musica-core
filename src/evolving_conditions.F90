@@ -123,7 +123,8 @@ contains
   !> Update the model state for a given time
   subroutine update_state( this, domain, state, time__s )
 
-    use musica_domain,                 only : domain_t, domain_state_t
+    use musica_domain,                 only : domain_t
+    use musica_domain_state,           only : domain_state_t
 
     !> Evolving conditions
     class(evolving_conditions_t), intent(inout) :: this
@@ -150,7 +151,8 @@ contains
 
     use musica_assert,                 only : assert
     use musica_config,                 only : config_t
-    use musica_domain,                 only : domain_t, domain_state_t
+    use musica_domain,                 only : domain_t
+    use musica_domain_state,           only : domain_state_t
     use musica_input_output_processor, only : input_output_processor_t
     use musica_string,                 only : string_t, to_char
 
@@ -191,7 +193,7 @@ contains
       var_names = this%input_files_( i_file )%val_%musica_variable_names( )
       do i_var = 1, size( var_names )
         associate( var_name => var_names( i_var ) )
-        units = domain%cell_state_units( var_name%to_char( ) )
+        units = domain%units( var_name%to_char( ) )
         call evo_cond_file%register_output_variable( domain,                  & ! - model domain
                                                      var_name%to_char( ),     & ! - variable name
                                                      units%to_char( ) )         ! - units
@@ -207,6 +209,8 @@ contains
       end do
       deallocate( evo_cond_file )
     end do
+
+    write(*,*) "... done!"
 
   end subroutine preprocess_input
 

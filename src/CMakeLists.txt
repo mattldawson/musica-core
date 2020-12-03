@@ -4,6 +4,14 @@
 set(MUSICA_SRC config.F90
                domain.F90
                domain_factory.F90
+               domain_iterator.F90
+               domain_state.F90
+               domain_state_accessor.F90
+               domain_state_mutator.F90
+               domain_target_cells.F90
+               domain_target_columns.F90
+               domain_target_model_top_cells.F90
+               domain_target_surface_cells.F90
                domains/cell.F90
                emissions.F90
                evolving_conditions.F90
@@ -30,12 +38,16 @@ set(MUSICA_SRC config.F90
                util/assert.F90
                util/constants.F90
                util/convert.F90
+               util/data_type.F90
                util/datetime.F90
                util/iterator.F90
                util/logger.F90
                util/map.F90
                util/math.F90
-               util/string.F90)
+               util/property.F90
+               util/property_set.F90
+               util/string.F90
+               util/target.F90)
 
 add_library(musicalib ${MUSICA_SRC})
 

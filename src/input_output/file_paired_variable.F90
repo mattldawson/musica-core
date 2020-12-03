@@ -8,8 +8,8 @@
 module musica_file_paired_variable
 
   use musica_constants,                only : musica_dk, musica_ik
-  use musica_domain,                   only : domain_state_accessor_t,        &
-                                              domain_state_mutator_t
+  use musica_domain_state_accessor,    only : domain_state_accessor_t
+  use musica_domain_state_mutator,     only : domain_state_mutator_t
   use musica_file_variable,            only : file_variable_t
   use musica_string,                   only : string_t
 
@@ -83,9 +83,12 @@ contains
       result( new_obj )
 
     use musica_assert,                 only : die
+    use musica_data_type,              only : kDouble
     use musica_domain,                 only : domain_t
+    use musica_domain_target_cells,    only : domain_target_cells_t
     use musica_file,                   only : file_t
     use musica_file_variable,          only : file_variable_t
+    use musica_property,               only : property_t
 
     !> New MUSICA<->File variable match
     type(file_paired_variable_t), pointer :: new_obj
@@ -100,6 +103,8 @@ contains
 
     character(len=*), parameter :: my_name = "File updater pair constructor"
     type(string_t) :: std_units, var_name
+    class(property_t), pointer :: prop
+    type(domain_target_cells_t) :: all_cells
 
     allocate( new_obj )
     allocate( new_obj%variable_, source = variable )
@@ -112,18 +117,20 @@ contains
     end if
 
     var_name = new_obj%variable_%musica_name( )
-    std_units = domain%cell_state_units( var_name%to_char( ) )
+    std_units = domain%units( var_name%to_char( ) )
+    prop => property_t( my_name,                                              &
+                        name = var_name%to_char( ),                           & !- state variable name
+                        units = std_units%to_char( ),                         & !- MUSICA units
+                        applies_to = all_cells,                               & !- target domain
+                        data_type = kDouble )                                   !- data type
     if( file%is_input( ) ) then
-      new_obj%mutator_ => domain%cell_state_mutator( var_name%to_char( ),     & !- state variable name
-                                                     std_units%to_char( ),    & !- MUSICA units
-                                                     my_name )
+      new_obj%mutator_ => domain%mutator( prop )
     end if
     if( file%is_output( ) .or. create_accessor ) then
-      new_obj%accessor_ => domain%cell_state_accessor( var_name%to_char( ),   & !- state variable name
-                                                       std_units%to_char( ),  & !- MUSICA units
-                                                       my_name )
+      new_obj%accessor_ => domain%accessor( prop )
     end if
     new_obj%musica_name_ = var_name
+    deallocate( prop )
 
   end function constructor
 
@@ -198,8 +205,8 @@ contains
       iterator ) result( musica_value )
 
     use musica_assert,                 only : assert
-    use musica_domain,                 only : domain_state_t,                 &
-                                              domain_iterator_t
+    use musica_domain_state,           only : domain_state_t
+    use musica_domain_iterator,        only : domain_iterator_t
 
     !> Paired variable
     class(file_paired_variable_t), intent(in) :: this
@@ -219,8 +226,8 @@ contains
   subroutine set_musica_value( this, domain_state, iterator, value )
 
     use musica_assert,                 only : assert
-    use musica_domain,                 only : domain_state_t,                 &
-                                              domain_iterator_t
+    use musica_domain_state,           only : domain_state_t
+    use musica_domain_iterator,        only : domain_iterator_t
 
     !> Paired variable
     class(file_paired_variable_t), intent(in) :: this
@@ -316,7 +323,10 @@ contains
   !!
   logical function do_match( domain, variable )
 
+    use musica_data_type,              only : kDouble
     use musica_domain,                 only : domain_t
+    use musica_domain_target_cells,    only : domain_target_cells_t
+    use musica_property,               only : property_t
 
     !> MUSICA domain
     class(domain_t), intent(inout) :: domain
@@ -325,27 +335,37 @@ contains
 
     character(len=*), parameter :: my_name = "File variable matcher"
     type(string_t) :: musica_name, musica_units
+    class(property_t), pointer :: prop
+    type(domain_target_cells_t) :: all_cells
 
     musica_name = variable%musica_name( )
 
     ! create state variables for emissions and loss rates
     if( musica_name%substring( 1, 15 ) .eq. "emission_rates%" ) then
-      call domain%register_cell_state_variable( musica_name%to_char( ),       & !- state variable name
-                                                "mol m-3 s-1",                & !- MUSICA units
-                                                0.0d0,                        & !- default units
-                                                my_name )
+      prop => property_t( my_name,                                            &
+                          name = musica_name%to_char( ),                      & !- state variable name
+                          units = "mol m-3 s-1",                              & !- MUSICA units
+                          data_type = kDouble,                                & !- data type
+                          applies_to = all_cells,                             & !- target domain
+                          default_value = 0.0d0 )                               !- default value
+      call domain%register( prop )
+      deallocate( prop )
     else if( musica_name%substring( 1, 20 ) .eq. "loss_rate_constants%" ) then
-      call domain%register_cell_state_variable( musica_name%to_char( ),       & !- state variable name
-                                                "s-1",                        & !- MUSICA units
-                                                0.0d0,                        & !- default value
-                                                my_name )
+      prop => property_t( my_name,                                            &
+                          name = musica_name%to_char( ),                      & !- state variable name
+                          units = "s-1",                                      & !- MUSICA units
+                          data_type = kDouble,                                & !- data type
+                          applies_to = all_cells,                             & !- target domain
+                          default_value = 0.0d0 )                               !- default value
+      call domain%register( prop )
+      deallocate( prop )
     end if
 
     ! look for state variables
-    do_match = domain%is_cell_state_variable( musica_name%to_char( ) )
+    do_match = domain%is_registered( musica_name%to_char( ) )
 
     if( do_match ) then
-      musica_units = domain%cell_state_units( musica_name%to_char( ) )
+      musica_units = domain%units( musica_name%to_char( ) )
       call variable%set_musica_units( musica_units%to_char( ) )
     end if
 

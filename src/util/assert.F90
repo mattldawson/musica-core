@@ -18,9 +18,24 @@ module musica_assert
   !> Error output id
   integer, parameter :: kErrorId = 0
 
+  interface assert_msg
+    module procedure :: assert_msg_string
+    module procedure :: assert_msg_char
+  end interface
+
+  interface assert_warn_msg
+    module procedure :: assert_warn_msg_string
+    module procedure :: assert_warn_msg_char
+  end interface
+
+  interface die_msg
+    module procedure :: die_msg_string
+    module procedure :: die_msg_char
+  end interface
+
   interface almost_equal
-    module procedure almost_equal_real
-    module procedure almost_equal_double
+    module procedure :: almost_equal_real
+    module procedure :: almost_equal_double
   end interface
 
 contains
@@ -28,7 +43,38 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   !> Asserts condition to be true or fails with provided message
-  subroutine assert_msg( code, condition, error_message )
+  subroutine assert_msg_string( code, condition, error_message )
+
+    use musica_string,                 only : string_t
+
+    !> Unique code for the assertion
+    integer, intent(in) :: code
+    !> Condition to evaluate
+    logical, intent(in) :: condition
+    !> Message to display on failure
+    type(string_t), intent(in) :: error_message
+
+    character(len=50) :: str_code
+
+    if( .not. condition ) then
+      write(str_code,'(i30)') code
+      write(kErrorId,*) "ERROR (MusicBox-"//trim( adjustl( str_code ) )//"): "&
+                        //error_message
+      open( unit = kErrorFileId, file = "error.json", action = "WRITE" )
+      write(kErrorFileId,'(A)') '{'
+      write(kErrorFileId,'(A)') '  "code" : "'//trim( adjustl( str_code ) )//'",'
+      write(kErrorFileId,'(A)') '  "message" : "'//error_message//'"'
+      write(kErrorFileId,'(A)') '}'
+      close(kErrorFileId)
+      stop 3
+    end if
+
+  end subroutine assert_msg_string
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Asserts condition to be true or fails with provided message
+  subroutine assert_msg_char( code, condition, error_message )
 
     !> Unique code for the assertion
     integer, intent(in) :: code
@@ -52,7 +98,7 @@ contains
       stop 3
     end if
 
-  end subroutine assert_msg
+  end subroutine assert_msg_char
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -71,7 +117,31 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   !> Asserts condition to be true or prints a provided warning message
-  subroutine assert_warn_msg( code, condition, warning_message )
+  subroutine assert_warn_msg_string( code, condition, warning_message )
+
+    use musica_string,                 only : string_t
+
+    !> Unique code for the assertion
+    integer, intent(in) :: code
+    !> Condition to evaluate
+    logical, intent(in) :: condition
+    !> Message to display on failure
+    type(string_t), intent(in) :: warning_message
+
+    character(len=50) :: str_code
+
+    if( .not. condition ) then
+      write(str_code,'(i30)') code
+      write(kErrorId,*) "WARNING (MusicBox-"//trim( adjustl( str_code ) )//   &
+                        "): "//warning_message
+    end if
+
+  end subroutine assert_warn_msg_string
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Asserts condition to be true or prints a provided warning message
+  subroutine assert_warn_msg_char( code, condition, warning_message )
 
     !> Unique code for the assertion
     integer, intent(in) :: code
@@ -88,12 +158,28 @@ contains
                         "): "//warning_message
     end if
 
-  end subroutine assert_warn_msg
+  end subroutine assert_warn_msg_char
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   !> Errors immediately and prints a provided message
-  subroutine die_msg( code, error_message )
+  subroutine die_msg_string( code, error_message )
+
+    use musica_string,                 only : string_t
+
+    !> Unique code for the failure
+    integer, intent(in) :: code
+    !> Message to display with failure
+    type(string_t), intent(in) :: error_message
+
+    call assert_msg( code, .false., error_message )
+
+  end subroutine die_msg_string
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Errors immediately and prints a provided message
+  subroutine die_msg_char( code, error_message )
 
     !> Unique code for the failure
     integer, intent(in) :: code
@@ -102,7 +188,7 @@ contains
 
     call assert_msg( code, .false., error_message )
 
-  end subroutine die_msg
+  end subroutine die_msg_char
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 

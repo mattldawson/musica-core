@@ -11,7 +11,7 @@ module musica_input_output_processor
   use musica_file,                     only : file_t
   use musica_file_dimension,           only : file_dimension_t
   use musica_file_updater,             only : file_updater_ptr
-  use musica_domain,                   only : domain_iterator_t
+  use musica_domain_iterator,          only : domain_iterator_t
 
   implicit none
   private
@@ -29,6 +29,7 @@ module musica_input_output_processor
   !! \todo add example usage for I/O processors
   !!
   type :: input_output_processor_t
+    private
     !> File attributes and functions
     class(file_t), pointer :: file_ => null( )
     !> Time dimension
@@ -256,7 +257,9 @@ contains
   subroutine update_state( this, domain, domain_state, time__s, tethered_only )
 
     use musica_assert,                 only : assert
-    use musica_domain,                 only : domain_t, domain_state_t
+    use musica_domain,                 only : domain_t
+    use musica_domain_state,           only : domain_state_t
+    use musica_domain_target_cells,    only : domain_target_cells_t
 
     !> Input/output
     class(input_output_processor_t), intent(inout) :: this
@@ -272,6 +275,7 @@ contains
 
     integer(kind=musica_ik) :: i_data, i_updater
     logical :: found, l_tethered_only
+    type(domain_target_cells_t) :: all_cells
 
     call assert( 967287335, associated( this%file_ ) )
     call assert( 682224647, this%file_%is_input( ) )
@@ -284,7 +288,7 @@ contains
       if( .not. found ) return
     end if
     if( .not. associated( this%iterator_ ) ) then
-      this%iterator_ => domain%cell_iterator( )
+      this%iterator_ => domain%iterator( all_cells )
     end if
     do i_updater = 1, size( this%linear_combination_updaters_ )
       associate( updater =>                                                   &
@@ -352,7 +356,9 @@ contains
   subroutine output( this, time__s, domain, domain_state )
 
     use musica_assert,                 only : die_msg
-    use musica_domain,                 only : domain_t, domain_state_t
+    use musica_domain,                 only : domain_t
+    use musica_domain_state,           only : domain_state_t
+    use musica_domain_target_cells,    only : domain_target_cells_t
 
     !> Input/output
     class(input_output_processor_t), intent(inout) :: this
@@ -364,9 +370,10 @@ contains
     class(domain_state_t), intent(in) :: domain_state
 
     integer(kind=musica_ik) :: i_updater
+    type(domain_target_cells_t) :: all_cells
 
     if( .not. associated( this%iterator_ ) ) then
-      this%iterator_ => domain%cell_iterator( )
+      this%iterator_ => domain%iterator( all_cells )
     end if
 
     do i_updater = 1, size( this%single_variable_updaters_ )

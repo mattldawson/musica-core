@@ -242,8 +242,8 @@ contains
   subroutine update_state( this, file, index, iterator, state )
 
     use musica_assert,                 only : assert
-    use musica_domain,                 only : domain_iterator_t,              &
-                                              domain_state_t
+    use musica_domain_state,           only : domain_state_t
+    use musica_domain_iterator,        only : domain_iterator_t
     use musica_file,                   only : file_t
 
     !> File updater
@@ -331,8 +331,9 @@ contains
   subroutine output( this, file, time__s, domain, domain_state, iterator )
 
     use musica_assert,                 only : assert, assert_msg
-    use musica_domain,                 only : domain_t, domain_state_t,       &
-                                              domain_iterator_t
+    use musica_domain,                 only : domain_t
+    use musica_domain_state,           only : domain_state_t
+    use musica_domain_iterator,        only : domain_iterator_t
     use musica_file,                   only : file_t
     use musica_file_dimension_range,   only : file_dimension_range_t
 
